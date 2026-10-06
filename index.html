@@ -53,6 +53,15 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.status.busy::before{animation:none}}
 
+/* 매장 탭 */
+.stores{position:sticky;z-index:4;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
+  margin:0 -14px 10px;padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--line);top:env(safe-area-inset-top,0px)}
+.stores::-webkit-scrollbar{display:none}
+.st{flex:none;border:1px solid var(--line);background:var(--card);border-radius:20px;padding:7px 14px;font-weight:600;font-size:14px;color:var(--sub)}
+.st.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.st.add{border-style:dashed;font-weight:500}
+.storetag{display:inline-block;font-size:12px;font-weight:700;color:var(--acc);background:var(--acc-soft);border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:2px}
+
 /* 사진 모음 */
 .tray{margin-top:10px;padding:10px 12px}
 .trayhead{display:flex;justify-content:space-between;align-items:center;font-size:14px}
@@ -150,6 +159,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
       <button class="icon-btn" id="openSet" aria-label="설정">⚙</button>
     </div>
   </header>
+  <nav class="stores" id="stores" aria-label="매장 선택"></nav>
 
   <div class="scan">
     <button class="big pri" id="camBtn">📷 주문표 찍기</button>
@@ -167,7 +177,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </div>
   <div class="status" id="status">표가 길면 위에서부터 나눠서 다 찍은 다음 'AI로 읽기'를 누르세요. 겹친 줄은 알아서 걸러요.</div>
 
-  <h2>주문 품목 <small id="itemCount"></small></h2>
+  <h2><span>주문 품목<span class="storetag" data-storename></span></span> <small id="itemCount"></small></h2>
   <div class="filters" id="filters"></div>
   <div class="card items" id="items"></div>
   <div class="rowbtns">
@@ -175,11 +185,11 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
     <button class="ghost" id="clearItems">목록 비우기</button>
   </div>
 
-  <h2>인원 <small>공용은 켜진 사람끼리 나눠요</small></h2>
+  <h2><span>인원<span class="storetag" data-storename></span></span> <small>공용은 켜진 사람끼리 나눠요</small></h2>
   <div id="people"></div>
   <button class="addp" id="addPerson"><b>+</b> 인원 추가</button>
 
-  <h2>보고</h2>
+  <h2><span>보고<span class="storetag" data-storename></span></span></h2>
   <div class="card report">
     <input id="title" aria-label="보고 제목">
     <div id="warn"></div>
@@ -216,13 +226,16 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
     <div><label for="totStyle">마지막 줄</label><select id="totStyle"><option value="pay">총 OO원 결제금액</option><option value="plain">총 OO원</option></select></div>
   </div>
   <div class="hint">정산 보고 사진을 찍으면 이 설정과 잔액이 사진에 맞게 자동으로 바뀌어요.</div>
-  <label>백업</label>
+  <label for="storeName">이 매장 이름</label>
+  <div style="display:flex;gap:8px"><input id="storeName"><button type="button" class="ghost" id="storeDel" style="flex:none;padding:8px 12px">매장 삭제</button></div>
+  <div class="hint">매장마다 인원·잔액·보고 모양·기록이 따로 저장돼요. 키와 AI 모델은 모든 매장이 같이 써요.</div>
+  <label>백업 (모든 매장)</label>
   <div class="grid2">
     <button type="button" class="ghost" id="expBtn">백업 복사</button>
     <button type="button" class="ghost" id="impBtn">백업 붙여넣기</button>
   </div>
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V4</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V5</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -260,19 +273,37 @@ let uid=Date.now(); const nid=()=>(uid++).toString(36);
 const $=s=>document.querySelector(s);
 
 function todayTitle(sfx){ const d=new Date(); return `${d.getMonth()+1}/${d.getDate()}${sfx!==undefined?sfx:(S.suffix||'')}`; }
-function defaults(){
+const GKEY='acc-settle-stores';
+function storeData(storeName,kind){
   const P=(name,label,shared)=>({id:nid(),name,label,shared,bal:0});
-  return { people:[P('두현','매장용&고객서비스',false),P('호규','고객서비스/공용',true),P('최수','고객서비스/공용',true),
-                   P('태훈','고객서비스/공용',true),P('창형','고객서비스/공용',false),P('','고객서비스/공용',false)],
-           items:[], title:'', suffix:'태검', model:'', amtStyle:'split', totStyle:'pay', v:3, history:[], filter:'all' };
+  const people=kind==='tg'
+    ?[P('두현','매장용&고객서비스',false),P('호규','고객서비스/공용',true),P('최수','고객서비스/공용',true),
+      P('태훈','고객서비스/공용',true),P('창형','고객서비스/공용',false),P('','고객서비스/공용',false)]
+    :Array.from({length:6},()=>P('','고객서비스/공용',true));
+  return { people, items:[], title:'', suffix:kind==='tg'?' 진천점 영활비':' '+storeName+' 영활비', amtStyle:'sum', totStyle:'plain', history:[], filter:'all' };
 }
-let S;
-try{ S=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){ S=null; }
-if(!S||!Array.isArray(S.people)) S=defaults();
-if(!S.v||S.v<3){ if(S.model==='gemini-2.5-flash') S.model=''; S.v=3; }
-S.items=S.items||[]; S.history=S.history||[]; S.filter=S.filter||'all';
+function fixData(d){ d.items=d.items||[]; d.history=d.history||[]; d.filter=d.filter||'all'; d.people=d.people||[]; return d; }
+let G=null, S=null;
+try{ G=JSON.parse(localStorage.getItem(GKEY)||'null'); }catch(e){ G=null; }
+if(!G||!Array.isArray(G.stores)||!G.stores.length){
+  // 처음이거나 예전 버전(매장 1개)에서 넘어온 경우: 기존 내용은 태검+진천으로
+  let old=null; try{ old=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){}
+  const S1=(n,k)=>({id:nid(),name:n,data:storeData(n,k)});
+  G={stores:[S1('평리점'),S1('성당점'),S1('태검+진천','tg')],cur:0,model:''};
+  if(old&&Array.isArray(old.people)){
+    G.stores[2].data=Object.assign(storeData('태검+진천','tg'),old);
+    ['model','models','modelsAt','modelOk','_k','v'].forEach(k=>{ if(old[k]!==undefined){ G[k]=old[k]; delete G.stores[2].data[k]; } });
+    if(G.model==='gemini-2.5-flash') G.model='';
+    G.cur=2;
+  }
+}
+G.stores.forEach(s=>fixData(s.data));
+if(!(G.cur>=0&&G.cur<G.stores.length)) G.cur=0;
+S=G.stores[G.cur].data;
 let API_KEY=''; try{ API_KEY=localStorage.getItem(KKEY)||''; }catch(e){}
-function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+function save(){ try{ localStorage.setItem(GKEY,JSON.stringify(G)); }catch(e){} }
+const curStore=()=>G.stores[G.cur];
+
 function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('show'),2000); }
 function setStatus(m,cls=''){ const s=$('#status'); s.textContent=m; s.className='status '+cls; }
 
@@ -378,7 +409,7 @@ function update(){
   if(document.activeElement!==$('#title')) $('#title').value=S.title||todayTitle();
   $('#preview').textContent=reportText(c);
   $('#barTotal').textContent=fmt(c.total)+'원';
-  const sb=$('#barSub'); sb.textContent=c.unsetN?`누구? ${c.unsetN}개 남음`:`결제금액 · 공용 ${fmt(c.shared)}원`; sb.className=c.unsetN?'bad':'';
+  const sb=$('#barSub'); sb.textContent=c.unsetN?`${curStore().name} · 누구? ${c.unsetN}개 남음`:`${curStore().name} 결제금액 · 공용 ${fmt(c.shared)}원`; sb.className=c.unsetN?'bad':'';
   save();
 }
 function renderHist(){
@@ -387,7 +418,26 @@ function renderHist(){
     <div style="display:flex;gap:6px"><button data-hcopy="${i}">복사</button>${i===0?'<button data-undo>되돌리기</button>':''}</div></div>`).join('')
     :'<div class="empty">확정한 정산이 여기에 쌓여요.</div>';
 }
-function renderAll(){ renderItems(); renderPeople(); renderHist(); update(); }
+function renderStores(){
+  $('#stores').innerHTML=G.stores.map((s,i)=>`<button class="st${i===G.cur?' on':''}" data-st="${i}" aria-pressed="${i===G.cur}">${esc(s.name)}</button>`).join('')+'<button class="st add" data-st="add">+ 매장</button>';
+  document.querySelectorAll('[data-storename]').forEach(e=>e.textContent=curStore().name);
+}
+function switchStore(i){
+  G.cur=i; S=G.stores[i].data; save(); renderAll();
+  setStatus(`${curStore().name}(으)로 바꿨어요.${tray.length?' 모아둔 사진은 이 매장으로 읽혀요.':''}`);
+  const on=document.querySelector('.st.on'); if(on) on.scrollIntoView({inline:'center',block:'nearest'});
+}
+$('#stores').onclick=e=>{
+  const b=e.target.closest('[data-st]'); if(!b) return;
+  if(b.dataset.st==='add'){
+    const n=(prompt('새 매장 이름을 넣어주세요 (예: 상인점)')||'').trim(); if(!n) return;
+    if(G.stores.some(s=>s.name===n)){ toast('같은 이름의 매장이 있어요'); return; }
+    G.stores.push({id:nid(),name:n,data:storeData(n)}); switchStore(G.stores.length-1); toast(`${n} 추가했어요. 인원 이름부터 넣어주세요`);
+    return;
+  }
+  const i=+b.dataset.st; if(i!==G.cur) switchStore(i);
+};
+function renderAll(){ renderStores(); renderItems(); renderPeople(); renderHist(); update(); }
 
 /* ---------- 사진 읽기 (Gemini) ---------- */
 function loadImg(file){
@@ -435,11 +485,11 @@ async function listModels(){
   return names.length?names.sort((a,b)=>rankModel(b)-rankModel(a)):null;
 }
 async function modelQueue(){
-  if(S.model) return [S.model];
-  if(!S.models||!S.modelsAt||Date.now()-S.modelsAt>3*86400000){
-    const l=await listModels(); if(l){ S.models=l; S.modelsAt=Date.now(); save(); }
+  if(G.model) return [G.model];
+  if(!G.models||!G.modelsAt||Date.now()-G.modelsAt>3*86400000){
+    const l=await listModels(); if(l){ G.models=l; G.modelsAt=Date.now(); save(); }
   }
-  const q=[...(S.modelOk?[S.modelOk]:[]),...(S.models||FALLBACK_MODELS)];
+  const q=[...(G.modelOk?[G.modelOk]:[]),...(G.models||FALLBACK_MODELS)];
   return [...new Set(q)].slice(0,5);
 }
 async function gemini(parts){
@@ -451,13 +501,13 @@ async function gemini(parts){
         body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0,responseMimeType:'application/json'}})});
       j=await r.json().catch(()=>({}));
     }catch(e){ throw new Error('인터넷 연결을 확인해 주세요'); }
-    if(r.ok){ if(S.modelOk!==m){ S.modelOk=m; save(); } return ((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join(''); }
+    if(r.ok){ if(G.modelOk!==m){ G.modelOk=m; save(); } return ((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join(''); }
     last=(j.error&&j.error.message)||('응답 오류 '+r.status);
     if(/API key|API_KEY/i.test(last)) throw new Error('Gemini 키가 올바르지 않아요. 설정에서 키를 다시 확인해 주세요');
-    if(S.modelOk===m){ S.modelOk=''; save(); }
-    if(S.model) break; // 직접 정한 모델이면 다른 걸로 안 바꿈
+    if(G.modelOk===m){ G.modelOk=''; save(); }
+    if(G.model) break; // 직접 정한 모델이면 다른 걸로 안 바꿈
   }
-  throw new Error(S.model?`'${S.model}' 모델로 읽지 못했어요. 설정에서 모델 칸을 비우면 자동으로 골라요`:'쓸 수 있는 AI 모델을 찾지 못했어요. 잠시 뒤 다시 해보세요 ('+last.slice(0,60)+')');
+  throw new Error(G.model?`'${G.model}' 모델로 읽지 못했어요. 설정에서 모델 칸을 비우면 자동으로 골라요`:'쓸 수 있는 AI 모델을 찾지 못했어요. 잠시 뒤 다시 해보세요 ('+last.slice(0,60)+')');
 }
 async function readPhoto(file){
   const b64=await toB64(file);
@@ -657,7 +707,7 @@ $('#copyBtn').onclick=copyReport; $('#copyBtn2').onclick=copyReport;
 $('#confirmBtn').onclick=()=>{
   const c=calc(); if(!c.total){ toast('품목이 없어요'); return; }
   if(c.unsetN){ toast('누구 건지 안 정한 품목부터 정해주세요'); S.filter='unset'; renderItems(); $('#filters').scrollIntoView({block:'start'}); return; }
-  if(!confirm(`총 ${fmt(c.total)}원으로 확정하고 각자 잔액에서 뺄까요?\n주문 목록은 비워져요. 바로 아래 '되돌리기'로 취소할 수 있어요.`)) return;
+  if(!confirm(`[${curStore().name}] 총 ${fmt(c.total)}원으로 확정하고 각자 잔액에서 뺄까요?\n주문 목록은 비워져요. 바로 아래 '되돌리기'로 취소할 수 있어요.`)) return;
   const text=reportText(c);
   const deltas=c.rows.filter(r=>r.amt>0).map(r=>({id:r.p.id,amt:r.amt}));
   deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); p.bal=(+p.bal||0)-d.amt; });
@@ -679,16 +729,31 @@ $('#hist').addEventListener('click',async e=>{
 });
 
 /* ---------- 설정 ---------- */
-$('#openSet').onclick=()=>{ $('#key').value=API_KEY; $('#model').value=S.model||''; $('#suffix').value=S.suffix||''; $('#amtStyle').value=S.amtStyle||'split'; $('#totStyle').value=S.totStyle||'pay'; $('#modelHint').textContent=S.model?'직접 정한 모델만 써요. 비우면 자동으로 골라요.':`비워두면 자동으로 골라요.${S.modelOk?' 지금 쓰는 모델: '+S.modelOk:''}`; $('#setDlg').showModal(); };
+$('#openSet').onclick=()=>{ $('#storeName').value=curStore().name; $('#key').value=API_KEY; $('#model').value=G.model||''; $('#suffix').value=S.suffix||''; $('#amtStyle').value=S.amtStyle||'split'; $('#totStyle').value=S.totStyle||'pay'; $('#modelHint').textContent=G.model?'직접 정한 모델만 써요. 비우면 자동으로 골라요.':`비워두면 자동으로 골라요.${G.modelOk?' 지금 쓰는 모델: '+G.modelOk:''}`; $('#setDlg').showModal(); };
 $('#setDlg').addEventListener('close',()=>{
   API_KEY=$('#key').value.trim(); try{ localStorage.setItem(KKEY,API_KEY); }catch(e){}
-  const nk=$('#model').value.trim(); if(nk!==S.model){ S.model=nk; S.modelOk=''; } S.suffix=$('#suffix').value.replace(/\s+$/,''); S.amtStyle=$('#amtStyle').value; S.totStyle=$('#totStyle').value; if(API_KEY!==(S._k||'')){ S.models=null; S.modelOk=''; S._k=API_KEY; } update();
+  if($('#setDlg').returnValue==='del') return;
+  const sn=$('#storeName').value.trim(); if(sn&&sn!==curStore().name&&!G.stores.some(s=>s.name===sn)){ if(S.suffix===' '+curStore().name+' 영활비'&&$('#suffix').value.replace(/\s+$/,'')===S.suffix) $('#suffix').value=' '+sn+' 영활비'; curStore().name=sn; renderStores(); }
+  const nk=$('#model').value.trim(); if(nk!==G.model){ G.model=nk; G.modelOk=''; } S.suffix=$('#suffix').value.replace(/\s+$/,''); S.amtStyle=$('#amtStyle').value; S.totStyle=$('#totStyle').value; if(API_KEY!==(G._k||'')){ G.models=null; G.modelOk=''; G._k=API_KEY; } update();
   if(API_KEY&&$('#status').classList.contains('err')) setStatus('키를 넣었어요. 이제 사진을 찍어보세요.');
 });
-$('#expBtn').onclick=async()=>{ toast(await copy(JSON.stringify(S))?'백업을 복사했어요. 메모장이나 카톡 나에게 보내기에 붙여두세요':'복사가 안 돼요'); };
+$('#storeDel').onclick=()=>{
+  if(G.stores.length<2){ toast('매장이 하나뿐이라 지울 수 없어요'); return; }
+  const n=curStore().name;
+  if(!confirm(`${n} 매장을 지울까요? 이 매장의 인원·잔액·기록이 모두 지워져요.`)) return;
+  if(prompt(`정말 지우려면 매장 이름 '${n}'을 그대로 입력하세요`)!==n){ toast('이름이 달라서 지우지 않았어요'); return; }
+  G.stores.splice(G.cur,1); $('#setDlg').close('del'); switchStore(Math.max(0,G.cur-1)); toast(`${n} 지웠어요`);
+};
+$('#expBtn').onclick=async()=>{ toast(await copy(JSON.stringify(G))?'백업을 복사했어요. 메모장이나 카톡 나에게 보내기에 붙여두세요':'복사가 안 돼요'); };
 $('#impBtn').onclick=()=>{
   const t=prompt('복사해 둔 백업을 붙여넣으세요. 지금 내용은 덮어써져요.'); if(!t) return;
-  try{ const d=JSON.parse(t); if(!Array.isArray(d.people)) throw 0; S=Object.assign(defaults(),d); renderAll(); toast('백업을 불러왔어요'); }
+  try{
+    const d=JSON.parse(t);
+    if(Array.isArray(d.stores)&&d.stores.length){ d.stores.forEach(s=>fixData(s.data)); G=Object.assign({model:''},d); if(!(G.cur>=0&&G.cur<G.stores.length)) G.cur=0; S=G.stores[G.cur].data; }
+    else if(Array.isArray(d.people)){ curStore().data=S=fixData(Object.assign(storeData(curStore().name),d)); }
+    else throw 0;
+    save(); renderAll(); toast('백업을 불러왔어요');
+  }
   catch(e){ toast('백업 내용이 올바르지 않아요'); }
 };
 
