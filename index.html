@@ -30,6 +30,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:4px
 h1{font-size:21px;margin:0;letter-spacing:-.02em}
 .inst{border:0;background:var(--acc);color:#fff;border-radius:10px;height:40px;padding:0 14px;font-weight:700;font-size:14px}
 .steps{margin:0;padding-left:20px;font-size:14px;line-height:1.8}
+.steps span{font-size:12px;color:var(--sub)}
 .icon-btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;width:40px;height:40px;font-size:18px}
 h2{font-size:16px;margin:22px 2px 10px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 h2 small{font-size:12px;color:var(--sub);font-weight:400}
@@ -185,24 +186,37 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   <input id="key" type="password" autocomplete="off" placeholder="AIza...">
   <div class="hint">강CRM에 쓰는 키를 그대로 넣으면 돼요. 이 폰에만 저장돼요.</div>
   <label for="model">AI 모델</label>
-  <input id="model" placeholder="gemini-2.5-flash">
-  <div class="hint">사진 읽기가 안 되면 여기 모델 이름을 바꿔보세요.</div>
+  <input id="model" placeholder="비워두면 자동">
+  <div class="hint" id="modelHint">비워두면 키로 쓸 수 있는 모델 중 좋은 걸 자동으로 골라요.</div>
   <label for="suffix">보고 제목 뒤에 붙일 말</label>
-  <input id="suffix" placeholder="태검">
-  <div class="hint">제목은 "오늘 날짜 + 이 말"로 자동으로 채워져요. 예) 10/6태검</div>
+  <input id="suffix" placeholder="예: 태검 또는 ' 진천점 영활비'">
+  <div class="hint">제목은 "오늘 날짜 + 이 말"로 채워져요. 띄우려면 앞에 한 칸 띄우세요.</div>
+  <div class="grid2">
+    <div><label for="amtStyle">금액 줄</label><select id="amtStyle"><option value="split">따로 (21,700원+1,383원)</option><option value="sum">합쳐서 (23,083원)</option></select></div>
+    <div><label for="totStyle">마지막 줄</label><select id="totStyle"><option value="pay">총 OO원 결제금액</option><option value="plain">총 OO원</option></select></div>
+  </div>
+  <div class="hint">정산 보고 사진을 찍으면 이 설정과 잔액이 사진에 맞게 자동으로 바뀌어요.</div>
   <label>백업</label>
   <div class="grid2">
     <button type="button" class="ghost" id="expBtn">백업 복사</button>
     <button type="button" class="ghost" id="impBtn">백업 붙여넣기</button>
   </div>
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V2</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V3</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
   <h3>앱으로 설치하기</h3>
   <ol class="steps" id="instSteps"></ol>
   <div class="row"><button value="close" class="pri">알겠어요</button></div>
+</form></dialog>
+
+<dialog id="repDlg"><form method="dialog" class="sheet">
+  <h3>정산 보고 사진이에요</h3>
+  <p class="hint" style="margin:0 0 10px">아래처럼 맞출까요? 사진 속 잔액이 지금 잔액이 돼요.</p>
+  <ul class="steps" id="repList"></ul>
+  <div id="repFmt"></div>
+  <div class="row"><button value="cancel">취소</button><button value="ok" class="pri">맞추기</button></div>
 </form></dialog>
 
 <dialog id="itemDlg"><form method="dialog" class="sheet" id="itemForm">
@@ -225,16 +239,17 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 let uid=Date.now(); const nid=()=>(uid++).toString(36);
 const $=s=>document.querySelector(s);
 
-function todayTitle(){ const d=new Date(); return `${d.getMonth()+1}/${d.getDate()}${S.suffix||''}`; }
+function todayTitle(sfx){ const d=new Date(); return `${d.getMonth()+1}/${d.getDate()}${sfx!==undefined?sfx:(S.suffix||'')}`; }
 function defaults(){
   const P=(name,label,shared)=>({id:nid(),name,label,shared,bal:0});
   return { people:[P('두현','매장용&고객서비스',false),P('호규','고객서비스/공용',true),P('최수','고객서비스/공용',true),
                    P('태훈','고객서비스/공용',true),P('창형','고객서비스/공용',false),P('','고객서비스/공용',false)],
-           items:[], title:'', suffix:'태검', model:'gemini-2.5-flash', history:[], filter:'all' };
+           items:[], title:'', suffix:'태검', model:'', amtStyle:'split', totStyle:'pay', v:3, history:[], filter:'all' };
 }
 let S;
 try{ S=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){ S=null; }
 if(!S||!Array.isArray(S.people)) S=defaults();
+if(!S.v||S.v<3){ if(S.model==='gemini-2.5-flash') S.model=''; S.v=3; }
 S.items=S.items||[]; S.history=S.history||[]; S.filter=S.filter||'all';
 let API_KEY=''; try{ API_KEY=localStorage.getItem(KKEY)||''; }catch(e){}
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
@@ -271,10 +286,10 @@ function calc(){
 }
 function reportText(c){
   const blocks=c.rows.filter(r=>r.amt>0).map(r=>{
-    const line=r.share>0?`${fmt(r.own)}원+${fmt(r.share)}원`:`${fmt(r.own)}원`;
+    const line=(S.amtStyle!=='sum'&&r.share>0)?`${fmt(r.own)}원+${fmt(r.share)}원`:`${fmt(r.amt)}원`;
     return [r.p.name||'(이름 없음)', r.p.label, line, `잔액 ${fmt(r.after)}원`].filter(Boolean).join('\n');
   });
-  return `${S.title||todayTitle()}\n\n${blocks.join('\n\n\n')}${blocks.length?'\n\n\n':''}총 ${fmt(c.total)}원 결제금액`;
+  return `${S.title||todayTitle()}\n\n${blocks.join('\n\n\n')}${blocks.length?'\n\n\n':''}총 ${fmt(c.total)}원${S.totStyle==='plain'?'':' 결제금액'}`;
 }
 
 /* ---------- 그리기 ---------- */
@@ -365,44 +380,136 @@ async function toB64(file){
   c.getContext('2d').drawImage(im,0,0,c.width,c.height);
   return c.toDataURL('image/jpeg',0.88).split(',')[1];
 }
-const PROMPT=`이 사진은 휴대폰 액세서리 도매 주문 내역 표입니다. 열은 사진, 제품명, 옵션, 단가/적립, 수량, 합계/적립, 메모입니다.
-표의 모든 행을 위에서 아래 순서대로 읽어 JSON 배열로만 답하세요. 다른 글자나 설명, 코드블록 표시는 쓰지 마세요.
-각 행 형식: {"name":"제품명 전체","option":"옵션","price":단가,"qty":수량,"total":합계,"memo":"메모"}
-규칙:
-- 숫자는 쉼표와 '원' 없이 정수로. 'point' 적립 숫자는 무시.
-- 메모는 사람 이름이나 '공용' 같은 짧은 글자입니다. 그대로 적으세요.
-- 사진 위나 아래 끝에서 잘려 합계나 메모가 안 보이는 행은 빼세요.
-- 빛 반사로 일부 글자가 가려져도 보이는 만큼 적으세요.
-- 표가 없으면 []`;
-async function readPhoto(file){
-  if(!API_KEY) throw new Error('NOKEY');
-  const b64=await toB64(file);
-  const model=(S.model||'gemini-2.5-flash').trim();
-  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(API_KEY)}`,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:PROMPT},{inline_data:{mime_type:'image/jpeg',data:b64}}]}],
-      generationConfig:{temperature:0,responseMimeType:'application/json'}})
-  });
+const PROMPT=`사진이 아래 A, B 중 무엇인지 판단해서 JSON 객체 하나로만 답하세요. 설명이나 코드블록 표시는 쓰지 마세요.
+
+A) 휴대폰 액세서리 주문 내역 표 (열: 사진, 제품명, 옵션, 단가/적립, 수량, 합계/적립, 메모)
+{"type":"order","items":[{"name":"제품명 전체","option":"옵션","price":단가,"qty":수량,"total":합계,"memo":"메모"}]}
+- 모든 행을 위에서 아래 순서대로. 숫자는 쉼표와 '원' 없이 정수. 'point' 적립 숫자는 무시.
+- 메모는 사람 이름이나 '공용' 같은 짧은 글자. 그대로 적기.
+- 사진 끝에서 잘려 합계나 메모가 안 보이는 행은 빼기. 빛 반사로 가려진 글자는 보이는 만큼.
+
+B) 사람별 정산 보고 메시지 (첫 줄 제목, 그다음 사람마다 이름 / 구분 / 금액 / '잔액 OO원', 마지막 '총 OO원')
+{"type":"report","title":"첫 줄 그대로","people":[{"name":"이름","label":"이름 아래 줄 그대로","amount_text":"금액 줄 그대로","balance":잔액정수}],"total_text":"총으로 시작하는 줄 그대로"}
+- 카톡의 '수정됨', 시간, 읽음 숫자, 프로필 사진은 무시.
+
+둘 다 아니면 {"type":"none"}`;
+
+/* AI 모델 자동 선택: 키로 쓸 수 있는 모델 목록을 받아 좋은 순서로 시도 */
+const GBASE='https://generativelanguage.googleapis.com/v1beta/';
+const FALLBACK_MODELS=['gemini-2.5-flash','gemini-flash-latest','gemini-2.0-flash','gemini-2.5-flash-lite'];
+function rankModel(n){
+  const v=parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1]||'0');
+  let s=v*10;
+  if(/flash/.test(n)&&!/lite/.test(n)) s+=3; else if(/lite/.test(n)) s+=1; else if(/pro/.test(n)) s+=2;
+  if(/latest/.test(n)) s+=0.3;
+  if(/preview|exp/.test(n)) s-=0.6;
+  return s;
+}
+async function listModels(){
+  const r=await fetch(`${GBASE}models?pageSize=200&key=${encodeURIComponent(API_KEY)}`);
   const j=await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error((j.error&&j.error.message)||('응답 오류 '+r.status));
-  const txt=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join('').replace(/```json|```/g,'').trim();
-  let arr; try{ arr=JSON.parse(txt); }catch(e){ const m=txt.match(/\[[\s\S]*\]/); arr=m?JSON.parse(m[0]):null; }
-  if(arr&&!Array.isArray(arr)) arr=arr.items||arr.rows||null;
-  if(!Array.isArray(arr)) throw new Error('표를 읽지 못했어요. 더 가까이, 반사 없이 찍어주세요');
-  return arr;
+  if(!r.ok){ const m=(j.error&&j.error.message)||''; if(/API key|API_KEY/i.test(m)) throw new Error('Gemini 키가 올바르지 않아요. 설정에서 키를 다시 확인해 주세요'); return null; }
+  const names=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
+    .map(m=>m.name.replace(/^models\//,''))
+    .filter(n=>/^gemini/.test(n)&&!/tts|image|audio|live|embed|aqa|robotics|computer|learnlm|gemma|thinking/i.test(n));
+  return names.length?names.sort((a,b)=>rankModel(b)-rankModel(a)):null;
+}
+async function modelQueue(){
+  if(S.model) return [S.model];
+  if(!S.models||!S.modelsAt||Date.now()-S.modelsAt>3*86400000){
+    const l=await listModels(); if(l){ S.models=l; S.modelsAt=Date.now(); save(); }
+  }
+  const q=[...(S.modelOk?[S.modelOk]:[]),...(S.models||FALLBACK_MODELS)];
+  return [...new Set(q)].slice(0,5);
+}
+async function gemini(parts){
+  const q=await modelQueue(); let last='';
+  for(const m of q){
+    let r,j;
+    try{
+      r=await fetch(`${GBASE}models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(API_KEY)}`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0,responseMimeType:'application/json'}})});
+      j=await r.json().catch(()=>({}));
+    }catch(e){ throw new Error('인터넷 연결을 확인해 주세요'); }
+    if(r.ok){ if(S.modelOk!==m){ S.modelOk=m; save(); } return ((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join(''); }
+    last=(j.error&&j.error.message)||('응답 오류 '+r.status);
+    if(/API key|API_KEY/i.test(last)) throw new Error('Gemini 키가 올바르지 않아요. 설정에서 키를 다시 확인해 주세요');
+    if(S.modelOk===m){ S.modelOk=''; save(); }
+    if(S.model) break; // 직접 정한 모델이면 다른 걸로 안 바꿈
+  }
+  throw new Error(S.model?`'${S.model}' 모델로 읽지 못했어요. 설정에서 모델 칸을 비우면 자동으로 골라요`:'쓸 수 있는 AI 모델을 찾지 못했어요. 잠시 뒤 다시 해보세요 ('+last.slice(0,60)+')');
+}
+async function readPhoto(file){
+  const b64=await toB64(file);
+  const txt=(await gemini([{text:PROMPT},{inline_data:{mime_type:'image/jpeg',data:b64}}])).replace(/```json|```/g,'').trim();
+  let d; try{ d=JSON.parse(txt); }catch(e){ const m=txt.match(/[\[{][\s\S]*[\]}]/); try{ d=m?JSON.parse(m[0]):null; }catch(e2){ d=null; } }
+  if(Array.isArray(d)) d={type:'order',items:d};
+  if(!d||!d.type) throw new Error('사진을 읽지 못했어요. 더 가까이, 반사 없이 찍어주세요');
+  return d;
 }
 const num=v=>{ const n=parseInt(String(v??'').replace(/[^\d-]/g,''),10); return isNaN(n)?0:n; };
 const sig=it=>[it.name,it.opt,it.qty,it.total,it.memo].map(x=>String(x||'').replace(/\s/g,'')).join('|');
+
+/* 보고 사진 → 잔액·구분·보고 모양 맞추기 */
+let pendingReport=null;
+function planReport(d){
+  const people=(d.people||[]).filter(p=>p&&p.name);
+  if(!people.length) return null;
+  const ch=[];
+  people.forEach(r=>{
+    const name=String(r.name).trim(), label=String(r.label||'').trim(), bal=num(r.balance);
+    const p=S.people.find(x=>x.name&&x.name.replace(/\s/g,'')===name.replace(/\s/g,''));
+    ch.push({name,label,bal,p,old:p?p.bal:null,oldLabel:p?p.label:''});
+  });
+  const title=String(d.title||'').trim();
+  const m=title.match(/^\s*\d{1,2}\s*\/\s*\d{1,2}(.*)$/);
+  const suffix=m?m[1].replace(/\s+$/,''):null;
+  const amts=people.map(p=>String(p.amount_text||''));
+  const amtStyle=amts.some(a=>/\d\s*원?\s*\+\s*\d/.test(a))?'split':'sum';
+  const tot=String(d.total_text||'');
+  const totStyle=/결제/.test(tot)?'pay':'plain';
+  return {ch,suffix,amtStyle,totStyle,title};
+}
+function showReportPlan(plan){
+  pendingReport=plan;
+  const L=[];
+  plan.ch.forEach(c=>{
+    const what=c.p?`잔액 ${fmt(c.old)}원 → <b>${fmt(c.bal)}원</b>`:`<b>새 인원 추가</b> · 잔액 ${fmt(c.bal)}원`;
+    const lab=c.label&&c.label!==c.oldLabel?`<br><span>구분: ${esc(c.label)}</span>`:'';
+    L.push(`<li><b>${esc(c.name)}</b> ${what}${lab}</li>`);
+  });
+  const fx=[];
+  if(plan.suffix!==null&&plan.suffix!==(S.suffix||'')) fx.push(`제목: 날짜 + "${esc(plan.suffix.trim())}" (예: ${esc(todayTitle(plan.suffix))})`);
+  if(plan.amtStyle!==(S.amtStyle||'split')) fx.push(plan.amtStyle==='sum'?'금액 줄: 개인+공용 합쳐서 한 줄':'금액 줄: 개인+공용 따로');
+  if(plan.totStyle!==(S.totStyle||'pay')) fx.push(plan.totStyle==='plain'?'마지막 줄: "총 OO원"':'마지막 줄: "총 OO원 결제금액"');
+  $('#repList').innerHTML=L.join('');
+  $('#repFmt').innerHTML=fx.length?`<p class="hint" style="margin:12px 0 4px">보고 모양도 이 사진처럼 바꿔요</p><ul class="steps">${fx.map(x=>`<li>${x}</li>`).join('')}</ul>`:'';
+  $('#repDlg').showModal();
+}
+function applyReport(plan){
+  plan.ch.forEach(c=>{
+    let p=c.p;
+    if(!p){ p=S.people.find(x=>!x.name); if(p) p.name=c.name; else { p={id:nid(),name:c.name,label:'',shared:false,bal:0}; S.people.push(p); } }
+    p.bal=c.bal; if(c.label) p.label=c.label;
+  });
+  if(plan.suffix!==null) S.suffix=plan.suffix;
+  S.amtStyle=plan.amtStyle; S.totStyle=plan.totStyle;
+  S.items.forEach(it=>{ if(!validTo(it.to)) it.to=matchTo(it.memo); });
+  renderAll();
+}
+
 async function handleFiles(files){
   files=[...files]; if(!files.length) return;
   if(!API_KEY){ setStatus('사진을 읽으려면 설정에서 Gemini 키를 먼저 넣어주세요.','err'); $('#setDlg').showModal(); return; }
-  let added=0, dups=0;
+  let added=0, dups=0, none=0, report=null;
   for(let i=0;i<files.length;i++){
     setStatus(`사진 ${i+1}/${files.length} 읽는 중…`,'busy');
     try{
-      const rows=await readPhoto(files[i]);
+      const d=await readPhoto(files[i]);
+      if(d.type==='report'){ report=d; continue; }
+      if(d.type!=='order'||!Array.isArray(d.items)||!d.items.length){ none++; continue; }
       const batch=nid(); const prev=new Set(S.items.map(sig));
-      rows.forEach(r=>{
+      d.items.forEach(r=>{
         const qty=num(r.qty)||1, price=num(r.price), total=num(r.total)||price*qty;
         if(!total&&!r.name) return;
         const it={id:nid(),name:String(r.name||'').trim(),opt:String(r.option||'').trim(),price,qty,total,memo:String(r.memo||'').trim(),batch};
@@ -411,12 +518,20 @@ async function handleFiles(files){
         S.items.push(it); added++;
       });
     }catch(e){
-      setStatus(`사진 ${i+1}: ${e.message}`,'err'); renderAll(); return;
+      setStatus(`사진 ${i+1}: ${e.message}`,'err'); toast(e.message); renderAll(); return;
     }
   }
   S.filter='all'; renderAll();
-  const c=calc();
-  setStatus(`${added}줄 읽었어요${dups?` (겹친 줄 ${dups}개는 뺐어요)`:''}${c.unsetN?` · 누구 건지 모르는 ${c.unsetN}줄을 정해주세요`:''}. 금액을 사진과 한 번 맞춰보세요.`);
+  const msg=[];
+  if(added){ const c=calc(); msg.push(`주문 ${added}줄 읽었어요${dups?` (겹친 줄 ${dups}개는 뺐어요)`:''}${c.unsetN?` · 누구 건지 모르는 ${c.unsetN}줄을 정해주세요`:''}. 금액을 사진과 한 번 맞춰보세요.`); }
+  if(report){
+    const plan=planReport(report);
+    if(plan){ msg.push('정산 보고 사진이에요. 잔액을 맞출지 확인해 주세요.'); showReportPlan(plan); }
+    else none++;
+  }
+  if(none) msg.push(`${none}장은 주문표나 정산 보고가 아니라서 건너뛰었어요.`);
+  if(!added&&!report&&none){ setStatus(msg.join(' '),'err'); toast('주문표나 정산 보고 사진이 아니에요'); }
+  else setStatus(msg.join(' '));
 }
 $('#camBtn').onclick=()=>$('#camIn').click();
 $('#albBtn').onclick=()=>$('#albIn').click();
@@ -517,10 +632,10 @@ $('#hist').addEventListener('click',async e=>{
 });
 
 /* ---------- 설정 ---------- */
-$('#openSet').onclick=()=>{ $('#key').value=API_KEY; $('#model').value=S.model||''; $('#suffix').value=S.suffix||''; $('#setDlg').showModal(); };
+$('#openSet').onclick=()=>{ $('#key').value=API_KEY; $('#model').value=S.model||''; $('#suffix').value=S.suffix||''; $('#amtStyle').value=S.amtStyle||'split'; $('#totStyle').value=S.totStyle||'pay'; $('#modelHint').textContent=S.model?'직접 정한 모델만 써요. 비우면 자동으로 골라요.':`비워두면 자동으로 골라요.${S.modelOk?' 지금 쓰는 모델: '+S.modelOk:''}`; $('#setDlg').showModal(); };
 $('#setDlg').addEventListener('close',()=>{
   API_KEY=$('#key').value.trim(); try{ localStorage.setItem(KKEY,API_KEY); }catch(e){}
-  S.model=$('#model').value.trim()||'gemini-2.5-flash'; S.suffix=$('#suffix').value.trim(); update();
+  const nk=$('#model').value.trim(); if(nk!==S.model){ S.model=nk; S.modelOk=''; } S.suffix=$('#suffix').value.replace(/\s+$/,''); S.amtStyle=$('#amtStyle').value; S.totStyle=$('#totStyle').value; if(API_KEY!==(S._k||'')){ S.models=null; S.modelOk=''; S._k=API_KEY; } update();
   if(API_KEY&&$('#status').classList.contains('err')) setStatus('키를 넣었어요. 이제 사진을 찍어보세요.');
 });
 $('#expBtn').onclick=async()=>{ toast(await copy(JSON.stringify(S))?'백업을 복사했어요. 메모장이나 카톡 나에게 보내기에 붙여두세요':'복사가 안 돼요'); };
@@ -529,6 +644,11 @@ $('#impBtn').onclick=()=>{
   try{ const d=JSON.parse(t); if(!Array.isArray(d.people)) throw 0; S=Object.assign(defaults(),d); renderAll(); toast('백업을 불러왔어요'); }
   catch(e){ toast('백업 내용이 올바르지 않아요'); }
 };
+
+$('#repDlg').addEventListener('close',()=>{
+  if($('#repDlg').returnValue==='ok'&&pendingReport){ applyReport(pendingReport); setStatus('보고 사진대로 잔액을 맞췄어요. 아래 인원에서 확인해 보세요.'); toast('잔액을 맞췄어요'); }
+  pendingReport=null;
+});
 
 /* ---------- 앱 설치 ---------- */
 const UA=navigator.userAgent;
