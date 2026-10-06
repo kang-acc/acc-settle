@@ -75,6 +75,32 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .st.add{border-style:dashed;font-weight:500}
 .storetag{display:inline-block;font-size:12px;font-weight:700;color:var(--acc);background:var(--acc-soft);border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:2px}
 
+/* 예약 악세 */
+.resv{overflow:hidden}
+.rv{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.rv.miss{background:var(--bad-soft)}
+.rv.done{cursor:default;opacity:.75}
+.rvt{min-width:0;flex:1}
+.rvt b{display:block;font-size:14px;font-weight:600}
+.rvt span{display:block;font-size:12px;color:var(--sub)}
+.rvt .rvm{color:var(--ink);opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rva{flex:none;display:flex;align-items:center;gap:4px}
+.rb{font-size:12px;font-weight:700;border-radius:8px;padding:3px 8px;white-space:nowrap;background:var(--bg);color:var(--sub)}
+.rb.ok{background:#E3F4EC;color:var(--ok)}
+.rb.miss{background:var(--bad);color:#fff}
+.rb.uns{background:var(--warn-soft);color:var(--warn)}
+@media (prefers-color-scheme:dark){.rb.ok{background:#16352A}}
+.resvsum{margin:10px 12px 0;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600}
+.resvsum.bad{background:var(--bad-soft);color:var(--bad)}
+.resvsum.uns{background:var(--warn-soft);color:var(--warn)}
+.resvsum.ok{background:#E3F4EC;color:var(--ok)}
+@media (prefers-color-scheme:dark){.resvsum.ok{background:#16352A}}
+.ghost.chk{border-style:solid;color:var(--ink)}
+.ghost:disabled{opacity:.45}
+.rdone{border-top:1px solid var(--line)}
+.rdone summary{padding:10px 12px;font-size:13px;color:var(--sub);cursor:pointer}
+.mini-btn{border:1px solid var(--line);background:none;border-radius:8px;padding:4px 8px;font-size:12px}
+
 /* 사진 모음 */
 .tray{margin-top:10px;padding:10px 12px}
 .trayhead{display:flex;justify-content:space-between;align-items:center;font-size:14px}
@@ -190,6 +216,17 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </div>
   <div class="status" id="status">표가 길면 위에서부터 나눠서 다 찍은 다음 'AI로 읽기'를 누르세요. 겹친 줄은 알아서 걸러요.</div>
 
+  <h2><span>예약 악세<span class="storetag" data-storename></span></span> <small id="resvCount"></small></h2>
+  <div class="card resv">
+    <div id="resvList"></div>
+    <div class="resvsum" id="resvSum" hidden></div>
+    <div class="rowbtns" style="padding:0 12px 12px">
+      <button class="ghost" id="resvAdd">+ 예약 추가</button>
+      <button class="ghost chk" id="resvCheck">✅ 빠진 거 확인</button>
+    </div>
+    <details class="rdone" id="resvDone" hidden><summary id="resvDoneSum"></summary><div id="resvDoneList"></div></details>
+  </div>
+
   <h2><span>주문 품목<span class="storetag" data-storename></span></span> <small id="itemCount"></small></h2>
   <div class="filters" id="filters"></div>
   <div class="card items" id="items"></div>
@@ -274,7 +311,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V7</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V8</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -289,6 +326,19 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   <ul class="steps" id="repList"></ul>
   <div id="repFmt"></div>
   <div class="row"><button value="cancel">취소</button><button value="ok" class="pri">맞추기</button></div>
+</form></dialog>
+
+<dialog id="resvDlg"><form method="dialog" class="sheet">
+  <h3 id="resvDlgTitle">예약 악세 추가</h3>
+  <label for="rText">무엇을</label>
+  <input id="rText" placeholder="예: 아이폰17 프로 클리어 케이스" required>
+  <div class="grid2">
+    <div><label for="rQty">수량</label><input id="rQty" type="number" inputmode="numeric" value="1"></div>
+    <div><label for="rWho">누가 받았나요</label><select id="rWho"></select></div>
+  </div>
+  <label for="rMemo">메모 (손님 이름 등)</label>
+  <input id="rMemo" placeholder="예: 김OO 고객 · 금요일 수령">
+  <div class="row"><button type="button" id="rDel" hidden style="flex:none;color:var(--bad)">삭제</button><button value="cancel" formnovalidate>취소</button><button value="ok" class="pri">저장</button></div>
 </form></dialog>
 
 <dialog id="itemDlg"><form method="dialog" class="sheet" id="itemForm">
@@ -465,10 +515,12 @@ function update(){
   if(c.unsetN) w.push(`누구 건지 안 정한 품목 ${c.unsetN}개(${fmt(c.unsetSum)}원)가 있어요. 위 목록에서 빨간 줄을 정해주세요.`);
   if(c.noMembers) w.push('공용 품목이 있는데 공용 나눔이 켜진 사람이 없어요.');
   c.rows.filter(r=>r.amt>0&&r.after<0).forEach(r=>w.push(`${r.p.name} 잔액이 마이너스가 돼요.`));
+  if(typeof renderResv==='function'&&S.resv){ const st=resvState(); if(S.items.length&&!st.stale&&st.miss.length) w.push(`예약 악세 ${st.miss.length}개가 이번 주문에 없어요: ${st.miss.map(r=>r.text).join(', ')}`); if(S.items.length&&st.P.length&&(st.stale||st.unchecked.length)) w.push('예약 악세가 있어요. 위에서 "빠진 거 확인"을 눌러보세요.'); }
   $('#warn').innerHTML=w.map(x=>`<div class="warnbox">${esc(x)}</div>`).join('');
   if(document.activeElement!==$('#title')) $('#title').value=S.title||todayTitle();
   $('#preview').textContent=reportText(c);
   $('#barTotal').textContent=fmt(c.total)+'원';
+  if(S.resv) renderResv();
   const sb=$('#barSub'); sb.textContent=c.unsetN?`${curStore().name} · 누구? ${c.unsetN}개 남음`:`${curStore().name} 결제금액 · 공용 ${fmt(c.shared)}원`; sb.className=c.unsetN?'bad':'';
   save();
 }
@@ -499,7 +551,7 @@ $('#stores').onclick=e=>{
   }
   const i=+b.dataset.st; if(i!==G.cur) switchStore(i);
 };
-function renderAll(){ renderStores(); renderItems(); renderPeople(); renderHist(); update(); }
+function renderAll(){ renderStores(); renderResv(); renderItems(); renderPeople(); renderHist(); update(); }
 
 /* ---------- 사진 읽기 (Gemini) ---------- */
 function loadImg(file){
@@ -689,6 +741,7 @@ async function handleFiles(files){
   if(none) msg.push(`${none}장은 주문표나 정산 보고가 아니라서 건너뛰었어요.`);
   if(!added&&!report&&none){ setStatus(msg.join(' '),'err'); toast('주문표나 정산 보고 사진이 아니에요'); }
   else setStatus(msg.join(' '));
+  if(added&&pending().length) runResvCheck(true);
   return true;
 }
 /* 사진 모아두기 → 다 찍고 한 번에 읽기 */
@@ -797,11 +850,17 @@ $('#copyBtn').onclick=copyReport; $('#copyBtn2').onclick=copyReport;
 $('#confirmBtn').onclick=()=>{
   const c=calc(); if(!c.total){ toast('품목이 없어요'); return; }
   if(c.unsetN){ toast('누구 건지 안 정한 품목부터 정해주세요'); S.filter='unset'; renderItems(); $('#filters').scrollIntoView({block:'start'}); return; }
+  const rs=resvState();
+  if(rs.P.length&&(rs.stale||rs.unchecked.length)&&!confirm('예약 악세를 아직 이번 주문과 비교하지 않았어요. 그냥 확정할까요?')) return;
+  if(!rs.stale&&rs.miss.length&&!confirm(`예약 악세 ${rs.miss.length}개가 이번 주문에 없어요.\n(${rs.miss.map(r=>r.text).join(', ')})\n그래도 확정할까요?`)) return;
   if(!confirm(`[${curStore().name}] 총 ${fmt(c.total)}원으로 확정하고 각자 잔액에서 뺄까요?\n주문 목록은 비워져요. 바로 아래 '되돌리기'로 취소할 수 있어요.`)) return;
   const text=reportText(c);
   const deltas=c.rows.filter(r=>r.amt>0).map(r=>({id:r.p.id,amt:r.amt}));
   deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); p.bal=(+p.bal||0)-d.amt; });
-  S.history.unshift({at:Date.now(),title:S.title||todayTitle(),total:c.total,text,deltas,items:S.items});
+  const ttl=S.title||todayTitle(); const doneIds=[];
+  if(!rs.stale) rs.ok.forEach(r=>{ r.status='ordered'; r.orderTitle=ttl; r.orderedAt=Date.now(); doneIds.push(r.id); });
+  S.resv&&S.resv.forEach(r=>delete r.chk); delete S.resvSig;
+  S.history.unshift({at:Date.now(),title:ttl,total:c.total,text,deltas,items:S.items,resvDone:doneIds});
   S.history=S.history.slice(0,30);
   S.items=[]; S.title=''; S.filter='all'; renderAll(); setStatus('확정했어요. 다음 주문표를 찍으면 돼요.');
   copy(text).then(ok=>toast(ok?'확정했어요. 보고도 복사해 뒀어요':'확정했어요'));
@@ -814,8 +873,127 @@ $('#hist').addEventListener('click',async e=>{
     if(S.items.length&&!confirm('지금 목록에 있는 품목은 지워지고 그때 품목으로 돌아가요. 되돌릴까요?')) return;
     if(!S.items.length&&!confirm(`${h.title} 정산을 취소하고 잔액을 되돌릴까요?`)) return;
     h.deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); if(p) p.bal=(+p.bal||0)+d.amt; });
-    S.items=h.items||[]; S.title=h.title; S.history.shift(); renderAll(); toast('되돌렸어요');
+    (h.resvDone||[]).forEach(id=>{ const r=(S.resv||[]).find(x=>x.id===id); if(r){ r.status='wait'; delete r.orderTitle; } });
+    S.items=h.items||[]; S.title=h.title; S.history.shift(); delete S.resvSig; renderAll(); toast('되돌렸어요');
   }
+});
+
+/* ---------- 예약 악세 · 빠진 거 확인 ---------- */
+const itemsSig=()=>S.items.filter(it=>it.to!=='ex').map(it=>it.id+':'+it.qty+':'+it.name).join('|');
+const pending=()=>(S.resv||[]).filter(r=>r.status!=='ordered');
+function whoName(id){ if(id==='shared') return '공용'; const p=S.people.find(x=>x.id===id); return p?(p.name||''):''; }
+function resvState(){
+  const P=pending(); const stale=S.resvSig!==undefined&&S.resvSig!==itemsSig();
+  const checked=P.filter(r=>r.chk);
+  return {P,stale,miss:checked.filter(r=>r.chk.s==='missing'),unsure:checked.filter(r=>r.chk.s==='unsure'),ok:checked.filter(r=>r.chk.s==='ok'),unchecked:P.filter(r=>!r.chk)};
+}
+function renderResv(){
+  S.resv=S.resv||[];
+  const st=resvState(); const done=S.resv.filter(r=>r.status==='ordered');
+  $('#resvCount').textContent=st.P.length?`대기 ${st.P.length}개`:'';
+  const badge=r=>{
+    if(!r.chk) return S.items.length?'<span class="rb">확인 전</span>':'';
+    const m={ok:['ok','✅ 주문에 있음'],missing:['miss','❌ 빠짐'],unsure:['uns','⚠️ 확인 필요']}[r.chk.s]||['','']; 
+    return `<span class="rb ${m[0]}">${m[1]}</span>`;
+  };
+  const row=r=>{
+    const it=r.chk&&r.chk.item?S.items.find(x=>x.id===r.chk.item):null;
+    const sub=[r.qty>1?`${r.qty}개`:'',whoName(r.who),r.memo,new Date(r.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 예약'].filter(Boolean).join(' · ');
+    return `<div class="rv${r.chk&&r.chk.s==='missing'?' miss':''}" data-rid="${r.id}">
+      <div class="rvt" data-redit><b>${esc(r.text)}</b><span>${esc(sub)}</span>
+      ${r.chk&&(it||r.chk.note)?`<span class="rvm">${it?'→ '+esc(it.name):''}${r.chk.note?(it?' · ':'')+esc(r.chk.note):''}</span>`:''}</div>
+      <div class="rva">${badge(r)}</div></div>`;
+  };
+  $('#resvList').innerHTML=st.P.length?st.P.map(row).join(''):'<div class="empty">손님이 예약한 악세를 적어두면, 주문표를 읽은 뒤 빠진 게 있는지 확인해 줘요.</div>';
+  $('#resvDone').hidden=!done.length;
+  $('#resvDoneSum').textContent=`주문 완료 ${done.length}개`;
+  $('#resvDoneList').innerHTML=done.slice(0,40).map(r=>`<div class="rv done" data-rid="${r.id}"><div class="rvt"><b>${esc(r.text)}</b><span>${esc([r.qty>1?r.qty+'개':'',whoName(r.who),r.memo,r.orderTitle?r.orderTitle+'에 주문':''].filter(Boolean).join(' · '))}</span></div><div class="rva"><button class="mini-btn" data-rback>대기로</button><button class="x" data-rdel aria-label="삭제">×</button></div></div>`).join('');
+  const cb=$('#resvCheck'); cb.disabled=!st.P.length||!S.items.length;
+  cb.textContent=st.stale&&st.P.some(r=>r.chk)?'🔄 다시 확인':'✅ 빠진 거 확인';
+  const sum=$('#resvSum');
+  if(st.P.length&&S.items.length&&st.P.some(r=>r.chk)&&!st.stale){
+    sum.hidden=false;
+    sum.className='resvsum '+(st.miss.length?'bad':st.unsure.length?'uns':'ok');
+    sum.textContent=st.miss.length?`예약 ${st.P.length}개 중 ${st.miss.length}개가 이번 주문에 없어요.${st.unsure.length?` 확인 필요 ${st.unsure.length}개.`:''}`
+      :st.unsure.length?`빠진 건 없지만 ${st.unsure.length}개는 기종·수량을 한 번 확인해 주세요.`:`예약 ${st.P.length}개 모두 이번 주문에 있어요.`;
+  } else sum.hidden=true;
+}
+// 키가 없거나 AI가 안 될 때 쓰는 간단 비교
+function normTok(s){
+  s=String(s||'').toLowerCase().replace(/아이폰|iphone/g,' 아이폰 ').replace(/갤럭시|galaxy/g,' 갤럭시 ').replace(/프로맥스|pro\s*max|promax/g,' 프로 맥스 ').replace(/프로|pro/g,' 프로 ').replace(/맥스|max/g,' 맥스 ')
+    .replace(/플러스|plus/g,' 플러스 ').replace(/울트라|ultra/g,' 울트라 ').replace(/폴드|fold|z폴드/g,' 폴드 ').replace(/플립|flip/g,' 플립 ')
+    .replace(/케이스|캡슐|범퍼|다이어리|커버/g,' 케이스 ').replace(/필름|글라스|강화유리|보호필름/g,' 필름 ').replace(/충전기|어댑터/g,' 충전기 ').replace(/케이블/g,' 케이블 ')
+    .replace(/([a-z가-힣])(\d)/g,'$1 $2').replace(/(\d)([a-z가-힣])/g,'$1 $2').replace(/[^0-9a-z가-힣.]+/g,' ');
+  return [...new Set(s.split(' ').filter(t=>t&&t.length>0&&!/^(개|용|의|및|원|입니다|손님|고객)$/.test(t)))];
+}
+function localCheck(P){
+  return P.map(r=>{
+    const rt=normTok(r.text); let best=null,bs=0;
+    S.items.filter(it=>it.to!=='ex').forEach(it=>{
+      const tt=new Set(normTok(it.name+' '+it.opt)); const hit=rt.filter(t=>tt.has(t)).length; const s=rt.length?hit/rt.length:0;
+      if(s>bs){ bs=s; best=it; }
+    });
+    if(bs>=0.75) return {id:r.id,s:best.qty<r.qty?'unsure':'ok',item:best.id,note:best.qty<r.qty?'수량이 적어요':''};
+    if(bs>=0.45) return {id:r.id,s:'unsure',item:best.id,note:'비슷한 품목'};
+    return {id:r.id,s:'missing',item:null,note:''};
+  });
+}
+async function aiCheck(P){
+  const items=S.items.filter(it=>it.to!=='ex');
+  const prompt=`휴대폰 매장 직원이 손님에게 미리 받아둔 "예약 악세" 목록과 실제 도매 주문 품목 목록이 있습니다. 예약마다 주문 품목에 들어 있는지 판단하세요.
+- 기종(예: 아이폰17 프로, 갤럭시 S26, 폴드8), 종류(케이스·필름/글라스·충전기·케이블 등), 색상·옵션이 맞아야 같은 것으로 봅니다. 줄임말이나 오타도 고려하세요.
+- 주문 품목 하나가 여러 기종 겸용일 수 있습니다 (예: "아이폰18 프로 6.3, 아이폰17 프로 6.3").
+- 예약에 브랜드·색이 안 적혀 있으면 기종과 종류만 맞으면 됩니다.
+- 같은 주문 품목을 여러 예약이 나눠 쓸 수 있지만, 주문 수량보다 예약 수량 합이 많으면 남는 예약은 unsure.
+- 확실히 있으면 ok, 없으면 missing, 애매하면 unsure.
+예약: ${JSON.stringify(P.map(r=>({id:r.id,text:r.text,qty:r.qty,who:whoName(r.who),memo:r.memo})))}
+주문: ${JSON.stringify(items.map((it,i)=>({i,name:it.name,option:it.opt,qty:it.qty,memo:it.memo})))}
+JSON 배열로만 답하세요: [{"id":"예약 id","status":"ok|missing|unsure","item":주문 i 또는 null,"note":"짧은 이유 15자 이내"}]`;
+  const txt=(await gemini([{text:prompt}])).replace(/```json|```/g,'').trim();
+  let arr; try{ arr=JSON.parse(txt); }catch(e){ const m=txt.match(/\[[\s\S]*\]/); arr=m?JSON.parse(m[0]):null; }
+  if(!Array.isArray(arr)) throw new Error('확인 결과를 읽지 못했어요');
+  return P.map(r=>{ const a=arr.find(x=>x&&x.id===r.id)||{};
+    const s=['ok','missing','unsure'].includes(a.status)?a.status:'unsure';
+    const it=Number.isInteger(a.item)&&items[a.item]?items[a.item].id:null;
+    return {id:r.id,s,item:it,note:String(a.note||'').slice(0,30)}; });
+}
+let checking=false;
+async function runResvCheck(quiet){
+  const P=pending(); if(!P.length||!S.items.length||checking) return;
+  checking=true; const cb=$('#resvCheck'); cb.disabled=true; cb.textContent='확인하는 중…';
+  let res, via='AI';
+  try{ if(!getKey()) throw new Error('nokey'); res=await aiCheck(P); }
+  catch(e){ res=localCheck(P); via='간단 비교'; if(!quiet&&e.message!=='nokey') toast('AI 확인이 안 돼서 간단 비교로 확인했어요'); }
+  res.forEach(x=>{ const r=S.resv.find(y=>y.id===x.id); if(r) r.chk={s:x.s,item:x.item,note:x.note,via}; });
+  S.resvSig=itemsSig(); checking=false; save(); renderResv(); update();
+  const st=resvState();
+  if(st.miss.length) toast(`예약 ${st.miss.length}개가 주문에 없어요`); else if(!quiet) toast(st.unsure.length?'확인 필요한 예약이 있어요':'예약이 모두 주문에 있어요');
+}
+let editingR=null;
+function openResv(id){
+  editingR=id; const r=id?S.resv.find(x=>x.id===id):{text:'',qty:1,who:'',memo:''};
+  $('#resvDlgTitle').textContent=id?'예약 고치기':'예약 악세 추가';
+  $('#rText').value=r.text; $('#rQty').value=r.qty||1; $('#rMemo').value=r.memo||'';
+  $('#rWho').innerHTML=`<option value="">선택 안 함</option>${S.people.filter(p=>p.name).map(p=>`<option value="${p.id}"${r.who===p.id?' selected':''}>${esc(p.name)}</option>`).join('')}<option value="shared"${r.who==='shared'?' selected':''}>공용</option>`;
+  $('#rDel').hidden=!id; $('#resvDlg').showModal(); setTimeout(()=>$('#rText').focus(),50);
+}
+$('#resvAdd').onclick=()=>openResv(null);
+$('#resvCheck').onclick=()=>runResvCheck(false);
+$('#resvList').addEventListener('click',e=>{ const r=e.target.closest('[data-rid]'); if(r) openResv(r.dataset.rid); });
+$('#resvDoneList').addEventListener('click',e=>{
+  const row=e.target.closest('[data-rid]'); if(!row) return; const r=S.resv.find(x=>x.id===row.dataset.rid);
+  if(e.target.closest('[data-rback]')){ r.status='wait'; delete r.chk; delete r.orderTitle; save(); renderResv(); toast('대기로 돌렸어요'); }
+  else if(e.target.closest('[data-rdel]')){ S.resv=S.resv.filter(x=>x!==r); save(); renderResv(); }
+});
+$('#rDel').onclick=()=>{ if(!confirm('이 예약을 지울까요?')) return; S.resv=S.resv.filter(x=>x.id!==editingR); $('#resvDlg').close('cancel'); save(); renderResv(); update(); };
+$('#resvDlg').addEventListener('close',()=>{
+  if($('#resvDlg').returnValue!=='ok') return;
+  const d={text:$('#rText').value.trim(),qty:Math.max(1,num($('#rQty').value)||1),who:$('#rWho').value,memo:$('#rMemo').value.trim()};
+  if(!d.text) return;
+  S.resv=S.resv||[];
+  if(editingR){ const r=S.resv.find(x=>x.id===editingR); Object.assign(r,d); delete r.chk; }
+  else S.resv.unshift({id:nid(),at:Date.now(),status:'wait',...d});
+  save(); renderResv(); update(); toast(editingR?'고쳤어요':'예약을 적어뒀어요');
 });
 
 /* ---------- 설정 ---------- */
