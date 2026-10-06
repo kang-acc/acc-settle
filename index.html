@@ -313,6 +313,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
         <button type="button" class="ghost chk" id="crmLogin">구글 로그인</button>
         <button type="button" class="ghost" id="crmLogout">로그아웃</button>
       </div>
+      <div class="status" id="crmMsg" role="status" style="margin:8px 0 0"></div>
     </div>
   </details>
 
@@ -328,7 +329,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9.1</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -435,7 +436,7 @@ const C=()=>{ G.mc=G.mc||{}; const k=getKey().slice(-10)||'none'; return G.mc[k]
 function save(){ try{ localStorage.setItem(GKEY,JSON.stringify(G)); }catch(e){} }
 const curStore=()=>G.stores[G.cur];
 
-function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('show'),2000); }
+function toast(m){ const t=$('#toast'); const dlg=document.querySelector('dialog[open]'); (dlg||document.body).appendChild(t); t.textContent=m; t.classList.add('show'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('show'),2000); }
 function setStatus(m,cls=''){ const s=$('#status'); s.textContent=m; s.className='status '+cls; }
 
 /* ---------- 메모 → 사람 연결 ---------- */
@@ -1044,6 +1045,7 @@ function needKey(){ setStatus(`${curStore().name} AI 키가 없어요. 설정에
 function fillSummaries(){
   $('#sumStore').textContent=curStore().name;
   const u=window.KCRM&&KCRM.email(); const sc=$('#sumCrm'); if(sc){ sc.textContent=u?u.split('@')[0]+' 로그인됨':'로그인 안 됨'; sc.className=u?'':'bad'; }
+  if(u) crmMsg(`✅ ${u} 로그인됨`);
   const k=getKey(); const sk=$('#sumKey'); sk.textContent=k?'키 있음 · …'+k.slice(-4):'키 없음'; sk.className=k?'':'bad';
   $('#sumRep').textContent=(S.blockTpl||S.totTpl)?'사진에서 배운 모양':(todayTitle());
 }
@@ -1057,8 +1059,14 @@ function openSettings(openId){
   if(openId==='accKey') setTimeout(()=>$('#key').focus(),50);
 }
 $('#openSet').onclick=()=>openSettings();
-$('#crmLogin').onclick=async()=>{ try{ await KCRM.login(); fillSummaries(); syncCrmBox(); if(pendingCrm().length) syncCrm(false); }catch(e){ toast(e.message||'로그인하지 못했어요'); } };
-$('#crmLogout').onclick=async()=>{ if(window.KCRM) await KCRM.logout(); fillSummaries(); toast('로그아웃했어요'); };
+function crmMsg(t,cls=''){ const m=$('#crmMsg'); if(m){ m.textContent=t; m.className='status '+cls; } }
+$('#crmLogin').onclick=async()=>{
+  if(!window.KCRM){ crmMsg(window.KCRM_LOAD_ERR?'강CRM 연결 도구를 못 불러왔어요. 인터넷을 확인하고 앱을 다시 열어주세요.':'연결 준비 중이에요. 2~3초 뒤 다시 눌러주세요.','err'); return; }
+  crmMsg('구글 로그인 창을 여는 중…','busy');
+  try{ await KCRM.login(); fillSummaries(); syncCrmBox(); crmMsg(KCRM.email()?`✅ ${KCRM.email()} 로그인됨`:'로그인 화면으로 이동해요…'); if(pendingCrm().length) syncCrm(false); }
+  catch(e){ crmMsg('❌ '+(e.message||'로그인하지 못했어요'),'err'); }
+};
+$('#crmLogout').onclick=async()=>{ if(window.KCRM) await KCRM.logout(); fillSummaries(); crmMsg('로그아웃했어요'); };
 $('#key').addEventListener('input',()=>{ const k=$('#key').value.trim(); const sk=$('#sumKey'); sk.textContent=k?'키 있음 · …'+k.slice(-4):'키 없음'; sk.className=k?'':'bad'; });
 $('#setDlg').addEventListener('close',()=>{
   if($('#setDlg').returnValue==='del') return;
@@ -1160,6 +1168,7 @@ renderAll();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 
+<script>window.addEventListener('error',e=>{ if(String(e.filename||e.message||'').includes('firebasejs')) window.KCRM_LOAD_ERR=1; },true);</script>
 <script type="module">
 /* 🔗 강CRM(Firebase)과 연결 — 강CRM에 등록된 직원 계정만 */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -1171,7 +1180,7 @@ const auth = getAuth(app), db = getFirestore(app);
 const provider = new GoogleAuthProvider(); provider.setCustomParameters({ prompt: 'select_account' });
 let user = null;
 const fire = () => window.dispatchEvent(new Event('kcrm-auth'));
-const why = (e) => { const c = String((e && e.code) || ''); if (/unauthorized-domain/.test(c)) return '이 주소가 Firebase 승인된 도메인에 없어요 (설정 필요)'; if (/permission-denied/.test(c)) return '강CRM에 등록된 직원 계정이 아니에요'; if (/network/.test(c)) return '인터넷 연결을 확인해 주세요'; if (/popup-closed|cancelled-popup/.test(c)) return '로그인 창이 닫혔어요'; return (e && e.message) || '문제가 생겼어요'; };
+const why = (e) => { const c = String((e && e.code) || ''); if (/unauthorized-domain/.test(c)) return `이 주소(${location.hostname})가 Firebase 승인된 도메인에 없어요. Firebase → Authentication → 설정 → 승인된 도메인에 추가해 주세요`; if (/popup-blocked/.test(c)) return '팝업이 막혔어요. 브라우저 주소창의 팝업 허용을 눌러주세요'; if (/api-key|invalid-api-key|requests-from-referer|referer/i.test(c + (e && e.message))) return `Firebase 키가 이 주소(${location.hostname})를 막고 있어요 (구글 클라우드 API 키 제한 확인)`; if (/internal-error/.test(c)) return '구글 로그인 설정 문제예요 (승인된 도메인 확인)'; if (/permission-denied/.test(c)) return '강CRM에 등록된 직원 계정이 아니에요'; if (/network/.test(c)) return '인터넷 연결을 확인해 주세요'; if (/popup-closed|cancelled-popup/.test(c)) return '로그인 창이 닫혔어요'; return (e && e.message) || '문제가 생겼어요'; };
 getRedirectResult(auth).catch(e => { if (typeof toast === 'function') toast(why(e)); });
 onAuthStateChanged(auth, (u) => {
   const em = String((u && u.email) || '').toLowerCase();
