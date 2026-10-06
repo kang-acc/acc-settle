@@ -184,6 +184,12 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
 .sheet .row button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:11px;font-weight:600}
 .sheet .row .pri{background:var(--acc);color:#fff;border-color:var(--acc)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.crmbox{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
+.crmchk{display:flex !important;align-items:center;gap:8px;margin:0 !important;color:var(--ink) !important;font-size:14px !important}
+.crmchk input{width:20px;height:20px;accent-color:var(--acc)}
+.rb.crm{background:#E0E7FF;color:#3730A3}
+.rb.crmx{background:var(--warn-soft);color:var(--warn)}
+@media (prefers-color-scheme:dark){.rb.crm{background:#24264A;color:#C7D2FE}}
 
 #toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--card);padding:9px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:90vw;text-align:center}
 #toast.show{opacity:1}
@@ -299,6 +305,17 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
     </div>
   </details>
 
+  <details class="acc" id="accCrm">
+    <summary><span>🔗 강CRM 연결</span><small id="sumCrm"></small></summary>
+    <div class="accb">
+      <div class="hint" style="margin-top:8px">예약을 강CRM '악세 예약' 약속으로 넣으려면 강CRM 직원 계정으로 로그인해요. 강CRM에 등록된 계정만 넣을 수 있어요.</div>
+      <div class="grid2" style="margin-top:8px">
+        <button type="button" class="ghost chk" id="crmLogin">구글 로그인</button>
+        <button type="button" class="ghost" id="crmLogout">로그아웃</button>
+      </div>
+    </div>
+  </details>
+
   <details class="acc" id="accBak">
     <summary><span>💾 백업 (모든 매장)</span><small>폰 바꿀 때</small></summary>
     <div class="accb">
@@ -311,7 +328,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V8</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -336,8 +353,20 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
     <div><label for="rQty">수량</label><input id="rQty" type="number" inputmode="numeric" value="1"></div>
     <div><label for="rWho">누가 받았나요</label><select id="rWho"></select></div>
   </div>
-  <label for="rMemo">메모 (손님 이름 등)</label>
-  <input id="rMemo" placeholder="예: 김OO 고객 · 금요일 수령">
+  <label for="rMemo">메모</label>
+  <input id="rMemo" placeholder="예: 색상은 블랙 · 금요일 저녁 방문">
+  <div class="crmbox">
+    <label class="crmchk"><input type="checkbox" id="rCrm"> <b>강CRM 약속으로 등록</b></label>
+    <div id="rCrmBody">
+      <div class="grid2">
+        <div><label for="rName">손님 이름</label><input id="rName" placeholder="예: 김OO" autocomplete="off"></div>
+        <div><label for="rPhone">손님 번호</label><input id="rPhone" type="tel" inputmode="tel" placeholder="010-0000-0000" autocomplete="off"></div>
+      </div>
+      <label for="rDate">찾으러 오는 날</label>
+      <input id="rDate" type="date">
+      <div class="hint" id="rCrmInfo"></div>
+    </div>
+  </div>
   <div class="row"><button type="button" id="rDel" hidden style="flex:none;color:var(--bad)">삭제</button><button value="cancel" formnovalidate>취소</button><button value="ok" class="pri">저장</button></div>
 </form></dialog>
 
@@ -360,6 +389,8 @@ const fmt=n=>(Math.round(n)||0).toLocaleString('ko-KR');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let uid=Date.now(); const nid=()=>(uid++).toString(36);
 const $=s=>document.querySelector(s);
+const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const fmtTel=v=>{ const d=String(v||'').replace(/\D/g,''); return d.length===11?d.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3'):d.length===10?d.replace(/(\d{3})(\d{3})(\d{4})/,'$1-$2-$3'):d; };
 
 function todayTitle(sfx){ const d=new Date(); return `${d.getMonth()+1}/${d.getDate()}${sfx!==undefined?sfx:(S.suffix||'')}`; }
 const GKEY='acc-settle-stores';
@@ -902,7 +933,7 @@ function renderResv(){
     return `<div class="rv${r.chk&&r.chk.s==='missing'?' miss':''}" data-rid="${r.id}">
       <div class="rvt" data-redit><b>${esc(r.text)}</b><span>${esc(sub)}</span>
       ${r.chk&&(it||r.chk.note)?`<span class="rvm">${it?'→ '+esc(it.name):''}${r.chk.note?(it?' · ':'')+esc(r.chk.note):''}</span>`:''}</div>
-      <div class="rva">${badge(r)}</div></div>`;
+      <div class="rva">${r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">📅 CRM ${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')}${badge(r)}</div></div>`;
   };
   $('#resvList').innerHTML=st.P.length?st.P.map(row).join(''):'<div class="empty">손님이 예약한 악세를 적어두면, 주문표를 읽은 뒤 빠진 게 있는지 확인해 줘요.</div>';
   $('#resvDone').hidden=!done.length;
@@ -974,12 +1005,15 @@ function openResv(id){
   editingR=id; const r=id?S.resv.find(x=>x.id===id):{text:'',qty:1,who:'',memo:''};
   $('#resvDlgTitle').textContent=id?'예약 고치기':'예약 악세 추가';
   $('#rText').value=r.text; $('#rQty').value=r.qty||1; $('#rMemo').value=r.memo||'';
+  $('#rName').value=r.cname||''; $('#rPhone').value=r.phone?fmtTel(r.phone):''; $('#rDate').value=r.pickup||ymd(new Date());
+  $('#rCrm').checked=id?!!(r.crm||r.crmPending):(localStorage.getItem('acc-crm-on')!=='0');
+  syncCrmBox();
   $('#rWho').innerHTML=`<option value="">선택 안 함</option>${S.people.filter(p=>p.name).map(p=>`<option value="${p.id}"${r.who===p.id?' selected':''}>${esc(p.name)}</option>`).join('')}<option value="shared"${r.who==='shared'?' selected':''}>공용</option>`;
   $('#rDel').hidden=!id; $('#resvDlg').showModal(); setTimeout(()=>$('#rText').focus(),50);
 }
 $('#resvAdd').onclick=()=>openResv(null);
 $('#resvCheck').onclick=()=>runResvCheck(false);
-$('#resvList').addEventListener('click',e=>{ const r=e.target.closest('[data-rid]'); if(r) openResv(r.dataset.rid); });
+$('#resvList').addEventListener('click',e=>{ if(e.target.closest('[data-crmretry]')){ syncCrm(false); return; } const r=e.target.closest('[data-rid]'); if(r) openResv(r.dataset.rid); });
 $('#resvDoneList').addEventListener('click',e=>{
   const row=e.target.closest('[data-rid]'); if(!row) return; const r=S.resv.find(x=>x.id===row.dataset.rid);
   if(e.target.closest('[data-rback]')){ r.status='wait'; delete r.chk; delete r.orderTitle; save(); renderResv(); toast('대기로 돌렸어요'); }
@@ -990,16 +1024,26 @@ $('#resvDlg').addEventListener('close',()=>{
   if($('#resvDlg').returnValue!=='ok') return;
   const d={text:$('#rText').value.trim(),qty:Math.max(1,num($('#rQty').value)||1),who:$('#rWho').value,memo:$('#rMemo').value.trim()};
   if(!d.text) return;
+  const wantCrm=$('#rCrm').checked; try{ localStorage.setItem('acc-crm-on',wantCrm?'1':'0'); }catch(e){}
+  d.cname=$('#rName').value.trim(); d.phone=$('#rPhone').value.replace(/\D/g,''); d.pickup=$('#rDate').value||ymd(new Date());
+  if(wantCrm){
+    if(!/^01\d{8,9}$/.test(d.phone)){ toast('손님 번호가 없어서 강CRM에는 안 넣었어요'); }
+    else { const old=editingR?S.resv.find(x=>x.id===editingR):null; if(!old||!old.crm||old.crm.id!==d.phone||old.crm.date!==d.pickup||old.text!==d.text||old.qty!==d.qty) d.crmPending=true; }
+  }
   S.resv=S.resv||[];
   if(editingR){ const r=S.resv.find(x=>x.id===editingR); Object.assign(r,d); delete r.chk; }
   else S.resv.unshift({id:nid(),at:Date.now(),status:'wait',...d});
   save(); renderResv(); update(); toast(editingR?'고쳤어요':'예약을 적어뒀어요');
+  if(pendingCrm().length) syncCrm(true);
 });
+$('#rCrm').addEventListener('change',syncCrmBox);
+$('#rPhone').addEventListener('input',e=>{ const d=e.target.value.replace(/\D/g,'').slice(0,11); if(d.length>=10) e.target.value=fmtTel(d); });
 
 /* ---------- 설정 ---------- */
 function needKey(){ setStatus(`${curStore().name} AI 키가 없어요. 설정에서 넣어주세요.`,'err'); openSettings('accKey'); }
 function fillSummaries(){
   $('#sumStore').textContent=curStore().name;
+  const u=window.KCRM&&KCRM.email(); const sc=$('#sumCrm'); if(sc){ sc.textContent=u?u.split('@')[0]+' 로그인됨':'로그인 안 됨'; sc.className=u?'':'bad'; }
   const k=getKey(); const sk=$('#sumKey'); sk.textContent=k?'키 있음 · …'+k.slice(-4):'키 없음'; sk.className=k?'':'bad';
   $('#sumRep').textContent=(S.blockTpl||S.totTpl)?'사진에서 배운 모양':(todayTitle());
 }
@@ -1013,6 +1057,8 @@ function openSettings(openId){
   if(openId==='accKey') setTimeout(()=>$('#key').focus(),50);
 }
 $('#openSet').onclick=()=>openSettings();
+$('#crmLogin').onclick=async()=>{ try{ await KCRM.login(); fillSummaries(); syncCrmBox(); if(pendingCrm().length) syncCrm(false); }catch(e){ toast(e.message||'로그인하지 못했어요'); } };
+$('#crmLogout').onclick=async()=>{ if(window.KCRM) await KCRM.logout(); fillSummaries(); toast('로그아웃했어요'); };
 $('#key').addEventListener('input',()=>{ const k=$('#key').value.trim(); const sk=$('#sumKey'); sk.textContent=k?'키 있음 · …'+k.slice(-4):'키 없음'; sk.className=k?'':'bad'; });
 $('#setDlg').addEventListener('close',()=>{
   if($('#setDlg').returnValue==='del') return;
@@ -1081,8 +1127,96 @@ instBtn.onclick=async()=>{
   $('#instDlg').showModal();
 };
 
+/* ---------- 🔗 강CRM '악세 예약' 약속 ---------- */
+const pendingCrm=()=>G.stores.flatMap(st=>(st.data.resv||[]).filter(r=>r.crmPending).map(r=>({r,st})));
+function syncCrmBox(){
+  const on=$('#rCrm').checked; $('#rCrmBody').hidden=!on;
+  const u=window.KCRM&&KCRM.email();
+  $('#rCrmInfo').textContent=!window.KCRM?'강CRM 연결 준비 중이에요…':(u?`${u.split('@')[0]} 계정으로 강CRM 고객의 '악세 예약' 약속에 넣어요. 찾으러 오는 날 아침에 알림이 가요.`:'저장하면 강CRM 직원 계정 로그인 창이 떠요. (처음 한 번)');
+}
+let crmSyncing=false;
+async function syncCrm(auto){
+  if(crmSyncing) return; const list=pendingCrm(); if(!list.length) return;
+  if(!window.KCRM){ if(!auto) toast('강CRM 연결 준비 중이에요. 잠시 뒤 다시 눌러주세요'); return; }
+  crmSyncing=true;
+  try{
+    if(!KCRM.email()) await KCRM.login();
+    let ok=0, fail='';
+    for(const {r,st} of list){
+      try{
+        await KCRM.addAcc({phone:r.phone,name:r.cname,date:r.pickup,text:r.text,qty:r.qty,memo:r.memo,store:st.name,staff:(st.data.people.find(p=>p.id===r.who)||{}).name||''});
+        r.crm={id:r.phone,date:r.pickup,at:Date.now()}; delete r.crmPending; ok++;
+      }catch(e){ fail=e.message||String(e); }
+    }
+    save(); renderResv();
+    if(ok&&!fail) toast(`강CRM 약속에 넣었어요 (${ok}건)`);
+    else if(fail) toast(`강CRM에 못 넣었어요: ${fail}`);
+  }catch(e){ toast(e.message||'강CRM 로그인이 필요해요'); }
+  finally{ crmSyncing=false; }
+}
+window.addEventListener('kcrm-auth',()=>{ fillSummaries(); if($('#resvDlg').open) syncCrmBox(); if(KCRM.email()&&pendingCrm().length) syncCrm(true); });
+
 renderAll();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+
+<script type="module">
+/* 🔗 강CRM(Firebase)과 연결 — 강CRM에 등록된 직원 계정만 */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+const app = initializeApp({ apiKey: "AIzaSyCEtd4aYZtxF7RTciLDHEc9oSReCE4_1rk", authDomain: "phoneplace-db.firebaseapp.com", projectId: "phoneplace-db", storageBucket: "phoneplace-db.firebasestorage.app", messagingSenderId: "677969361393", appId: "1:677969361393:web:0f05a20ead3d575e1d6c50" });
+const STAFF = ['hogyu0921@gmail.com', 'a44443353@gmail.com', 'phoneplace0070@gmail.com'];   // 강CRM과 같은 목록 (실제 막는 건 Firebase 보안 규칙)
+const auth = getAuth(app), db = getFirestore(app);
+const provider = new GoogleAuthProvider(); provider.setCustomParameters({ prompt: 'select_account' });
+let user = null;
+const fire = () => window.dispatchEvent(new Event('kcrm-auth'));
+const why = (e) => { const c = String((e && e.code) || ''); if (/unauthorized-domain/.test(c)) return '이 주소가 Firebase 승인된 도메인에 없어요 (설정 필요)'; if (/permission-denied/.test(c)) return '강CRM에 등록된 직원 계정이 아니에요'; if (/network/.test(c)) return '인터넷 연결을 확인해 주세요'; if (/popup-closed|cancelled-popup/.test(c)) return '로그인 창이 닫혔어요'; return (e && e.message) || '문제가 생겼어요'; };
+getRedirectResult(auth).catch(e => { if (typeof toast === 'function') toast(why(e)); });
+onAuthStateChanged(auth, (u) => {
+  const em = String((u && u.email) || '').toLowerCase();
+  if (u && !STAFF.includes(em)) { signOut(auth); user = null; if (typeof toast === 'function') toast('강CRM에 등록된 직원 계정만 쓸 수 있어요'); }
+  else user = u;
+  fire();
+});
+window.KCRM = {
+  email: () => (user && user.email) || '',
+  async login() {
+    try { await signInWithPopup(auth, provider); }
+    catch (e) {
+      const c = String((e && e.code) || '');
+      if (/popup-blocked|operation-not-supported/.test(c)) { await signInWithRedirect(auth, provider); return; }
+      throw new Error(why(e));
+    }
+    if (!user) await new Promise(r => setTimeout(r, 400));
+    if (!user) throw new Error('강CRM에 등록된 직원 계정만 쓸 수 있어요');
+  },
+  async logout() { await signOut(auth); },
+  // 강CRM 고객에 '악세 예약' 약속 넣기 (없는 손님이면 미정 고객으로 새로 등록)
+  async addAcc(r) {
+    if (!user) throw new Error('강CRM 로그인이 필요해요');
+    const id = String(r.phone || '').replace(/\D/g, '');
+    if (!/^01\d{8,9}$/.test(id)) throw new Error('손님 번호가 올바르지 않아요');
+    const ref = doc(db, 'smart_customers', id);
+    const now = new Date().toISOString(), today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+    const line = `${r.text}${r.qty > 1 ? ' ' + r.qty + '개' : ''}${r.memo ? ' (' + r.memo + ')' : ''}`;
+    const staff = r.staff || user.email.split('@')[0];
+    let snap;
+    try { snap = await getDoc(ref); } catch (e) { throw new Error(why(e)); }
+    const c = snap.exists() ? snap.data() : null;
+    let date = r.date, memo = `${line} · ${r.store} 악세정산`;
+    if (c && c.promAccDate && !c.promAccChk && c.promAccMemo && !String(c.promAccMemo).includes(r.text)) {
+      // 아직 안 찾아간 악세 예약이 있으면 합쳐서 (날짜는 빠른 쪽)
+      date = String(c.promAccDate) < date ? String(c.promAccDate) : date;
+      memo = `${c.promAccMemo} + ${line}`;
+    }
+    const upd = { promAccDate: date, promAccMemo: memo.slice(0, 300), promAccChk: false, updatedAt: now };
+    if (!c) Object.assign(upd, { name: r.name || '', phone: id.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3'), salesStatus: '미정', visitDate: today, regDate: today, regBy: staff, manager: staff, regStore: r.store || '', memo: '악세정산 앱 예약으로 등록', createdAt: now });
+    else if (!c.name && r.name) upd.name = r.name;
+    try { await setDoc(ref, upd, { merge: true }); } catch (e) { throw new Error(why(e)); }
+  }
+};
+fire();
 </script>
 </body>
 </html>
