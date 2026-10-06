@@ -329,7 +329,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9.3</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9.4</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -570,7 +570,7 @@ function renderStores(){
   document.querySelectorAll('[data-storename]').forEach(e=>e.textContent=curStore().name);
 }
 function switchStore(i){
-  G.cur=i; S=G.stores[i].data; save(); renderAll();
+  G.cur=i; S=G.stores[i].data; save(); renderAll(); pullCrm(true);
   renderTray();
   setStatus(`${curStore().name}(으)로 바꿨어요.${T().length?` 이 매장에 모아둔 사진 ${T().length}장이 있어요.`:''}`);
   const on=document.querySelector('.st.on'); if(on) on.scrollIntoView({inline:'center',block:'nearest'});
@@ -937,7 +937,7 @@ function renderResv(){
     return `<div class="rv${r.chk&&r.chk.s==='missing'?' miss':''}" data-rid="${r.id}">
       <div class="rvt" data-redit><b>${esc(r.text)}</b><span>${esc(sub)}</span>
       ${r.chk&&(it||r.chk.note)?`<span class="rvm">${it?'→ '+esc(it.name):''}${r.chk.note?(it?' · ':'')+esc(r.chk.note):''}</span>`:''}</div>
-      <div class="rva">${r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">📅 CRM ${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')}${badge(r)}</div></div>`;
+      <div class="rva">${r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">${r.src==='crm'?'📥 CRM에서 ':'📅 CRM '}${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')}${badge(r)}</div></div>`;
   };
   $('#resvList').innerHTML=st.P.length?st.P.map(row).join(''):'<div class="empty">손님이 예약한 악세를 적어두면, 주문표를 읽은 뒤 빠진 게 있는지 확인해 줘요.</div>';
   $('#resvDone').hidden=!done.length;
@@ -1045,7 +1045,7 @@ $('#resvDlg').addEventListener('close',()=>{
     else if(!old||!old.crm||old.crm.date!==d.pickup) d.crmPending=true;                                // 새로 넣기 (날짜만 바뀌어도)
   }
   S.resv=S.resv||[];
-  if(editingR){ const r=S.resv.find(x=>x.id===editingR); Object.assign(r,d); delete r.chk; }
+  if(editingR){ const r=S.resv.find(x=>x.id===editingR); const was=r.src==='crm'&&(r.text!==d.text||r.phone!==d.phone||r.pickup!==d.pickup||r.qty!==d.qty||(r.memo||'')!==d.memo); Object.assign(r,d); delete r.chk; if(was){ delete r.src; delete r.crmKey; if(wantCrm&&okPhone) r.crmPending=true; } }
   else S.resv.unshift({id:nid(),at:Date.now(),status:'wait',...d});
   save(); renderResv(); update(); toast(editingR?'고쳤어요':'예약을 적어뒀어요');
   if(pendingCrm().length||pendingCrmDel().length) syncCrm(!(wantCrm&&okPhone&&!crmEmail()));   // 이 매장 첫 등록이면 로그인 창
@@ -1201,6 +1201,48 @@ async function syncCrm(auto){
   }catch(e){ toast(e.message||'강CRM 로그인이 필요해요'); }
   finally{ crmSyncing=false; }
 }
+/* ---------- 📥 강CRM에서 잡은 악세 예약 → 이 매장 예약 목록 ---------- */
+let crmPulling=false, storesShared='';
+async function pullCrm(quiet){
+  if(crmPulling||!window.KCRM||$('#resvDlg').open) return; crmPulling=true;
+  try{
+    const names=G.stores.map(s=>s.name), sig=names.join('|');
+    let got=0, moved=0, gone=0;
+    for(const st of G.stores){
+      if(!crmEmail(st.id)) continue;
+      if(storesShared!==sig){ KCRM.shareStores(st.id,names); storesShared=sig; }
+      let list; try{ list=await KCRM.pullAcc(st.id); }catch(e){ if(!quiet) toast(`강CRM 예약을 못 가져왔어요: ${e.message}`); continue; }
+      if(!list) continue;
+      const D=st.data; D.resv=D.resv||[];
+      const mine=list.filter(e=>e.store===st.name&&e.date&&e.memo&&!e.chk&&!e.deleted&&e.key);
+      const keys=new Set(mine.map(e=>e.key));
+      for(const e of mine){
+        let r=D.resv.find(x=>x.crmKey===e.key);
+        if(!r){ // 악세정산에서 넣었던 같은 손님 예약을 강CRM에서 고친 경우 → 그 예약으로 이어받기
+          r=D.resv.find(x=>!x.src&&x.crm&&x.crm.id===e.id&&x.status==='wait');
+          if(r){ r.src='crm'; r.crmKey=e.key; }
+        }
+        const who=(D.people.find(p=>p.name&&e.by&&String(e.by).replace(/\s+/g,'').startsWith(p.name.replace(/\s+/g,'')))||{}).id||'';
+        if(!r){
+          D.resv.unshift({id:nid(),at:Date.now(),status:'wait',text:e.memo,qty:1,who,memo:'',cname:e.name,phone:e.id,pickup:e.date,src:'crm',crmKey:e.key,crm:{id:e.id,date:e.date,line:e.memo,at:Date.now()}});
+          got++;
+        } else if(r.status==='wait'&&(r.text!==e.memo||r.pickup!==e.date||r.phone!==e.id)){
+          Object.assign(r,{text:e.memo,qty:1,memo:'',pickup:e.date,phone:e.id,cname:e.name||r.cname,crm:{id:e.id,date:e.date,line:e.memo,at:Date.now()}});
+          moved++;
+        }
+      }
+      // 강CRM에서 지웠거나(빈칸) 체크(찾아감)했거나 다른 매장으로 옮긴 예약은 이 목록에서 빼기 (대기 중인 것만)
+      const before=D.resv.length;
+      D.resv=D.resv.filter(r=>!(r.src==='crm'&&r.status==='wait'&&!keys.has(r.crmKey)&&!r.crmPending));
+      gone+=before-D.resv.length;
+    }
+    if(got||moved||gone){ S=G.stores[G.cur].data; save(); renderResv(); update(); if(!quiet||got) toast([got?`강CRM에서 악세 예약 ${got}건 가져왔어요`:'',moved?`${moved}건 바뀜`:'',gone?`${gone}건 정리`:''].filter(Boolean).join(' · ')); }
+  } finally { crmPulling=false; }
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') pullCrm(true); });
+setInterval(()=>{ if(document.visibilityState==='visible') pullCrm(true); },120000);
+window.addEventListener('kcrm-auth',()=>{ clearTimeout(window.__pullT); window.__pullT=setTimeout(()=>pullCrm(true),400); });
+
 window.addEventListener('kcrm-auth',()=>{ fillSummaries(); if($('#resvDlg').open) syncCrmBox(); if(pendingCrm().some(x=>crmEmail(x.st.id))||pendingCrmDel().some(x=>crmEmail(x.st.id))) syncCrm(true); });
 
 renderAll();
@@ -1212,7 +1254,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigat
 /* 🔗 강CRM(Firebase)과 연결 — 강CRM에 등록된 직원 계정만 */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 const CFG = { apiKey: "AIzaSyCEtd4aYZtxF7RTciLDHEc9oSReCE4_1rk", authDomain: "phoneplace-db.firebaseapp.com", projectId: "phoneplace-db", storageBucket: "phoneplace-db.firebasestorage.app", messagingSenderId: "677969361393", appId: "1:677969361393:web:0f05a20ead3d575e1d6c50" };
 const STAFF = ['hogyu0921@gmail.com', 'a44443353@gmail.com', 'phoneplace0070@gmail.com'];   // 강CRM과 같은 목록 (실제 막는 건 Firebase 보안 규칙)
 const fire = () => window.dispatchEvent(new Event('kcrm-auth'));
@@ -1252,6 +1294,20 @@ window.KCRM = {
     if (!sl.user) throw new Error('강CRM에 등록된 직원 계정만 쓸 수 있어요');
   },
   async logout(id) { await signOut(slot(id).auth); },
+  // 강CRM에서 잡은 악세 예약 가져오기 (promAccFrom == 'crm')
+  async pullAcc(sid) {
+    const sl = slot(sid);
+    if (!sl.user) return null;
+    let snap;
+    try { snap = await getDocs(query(collection(sl.db, 'smart_customers'), where('promAccFrom', '==', 'crm'))); } catch (e) { throw new Error(why(e)); }
+    return snap.docs.map(d => { const c = d.data(); return { id: d.id, name: c.name || '', date: String(c.promAccDate || '').slice(0, 10), memo: String(c.promAccMemo || ''), chk: !!c.promAccChk, store: c.promAccStore || '', key: c.promAccKey || '', by: c.promAccBy || '', deleted: !!c.deletedAt }; });
+  },
+  // 강CRM 화면의 '악세정산 매장' 목록을 이 앱의 매장 이름으로 맞춤
+  async shareStores(sid, names) {
+    const sl = slot(sid);
+    if (!sl.user || !Array.isArray(names) || !names.length) return;
+    try { await setDoc(doc(sl.db, 'smart_global', 'settings'), { accStores: names.slice(0, 20) }, { merge: true }); } catch (e) { /* 권한 없으면 그만 */ }
+  },
   // 강CRM 고객의 '악세 예약'에서 이 예약 줄만 빼기 (다른 예약이 남아 있으면 그 줄은 그대로)
   async removeAcc(x, sid) {
     const sl = slot(sid), user = sl.user, db = sl.db;
@@ -1272,7 +1328,7 @@ window.KCRM = {
     const rest = segs.filter((_, j) => j !== i);
     const upd = rest.length
       ? { promAccMemo: rest.join(' + ').slice(0, 300), ...(/^\d{4}-\d{2}-\d{2}$/.test(x.nextDate || '') ? { promAccDate: x.nextDate } : {}), updatedAt: new Date().toISOString() }
-      : { promAccDate: '', promAccMemo: '', promAccChk: false, updatedAt: new Date().toISOString() };
+      : { promAccDate: '', promAccMemo: '', promAccChk: false, promAccFrom: '', promAccKey: '', promAccStore: '', updatedAt: new Date().toISOString() };
     try { await setDoc(ref, upd, { merge: true }); } catch (e) { throw new Error(why(e)); }
     return rest.length ? 'part' : 'cleared';
   },
@@ -1298,7 +1354,7 @@ window.KCRM = {
         memo = `${others.join(' + ')} + ${line}`;
       }
     }
-    const upd = { promAccDate: date, promAccMemo: memo.slice(0, 300), promAccChk: false, updatedAt: now };
+    const upd = { promAccDate: date, promAccMemo: memo.slice(0, 300), promAccChk: false, promAccFrom: 'acc', promAccStore: r.store || '', promAccKey: '', updatedAt: now };
     if (!c) Object.assign(upd, { name: r.name || '', phone: id.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3'), salesStatus: '미정', visitDate: today, regDate: today, regBy: staff, manager: staff, regStore: r.store || '', memo: '악세정산 앱 예약으로 등록', createdAt: now });
     else if (!c.name && r.name) upd.name = r.name;
     try { await setDoc(ref, upd, { merge: true }); } catch (e) { throw new Error(why(e)); }
