@@ -53,6 +53,18 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.status.busy::before{animation:none}}
 
+/* 사진 모음 */
+.tray{margin-top:10px;padding:10px 12px}
+.trayhead{display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.trayhead button{border:0;background:none;color:var(--sub);font-size:13px;padding:4px}
+.thumbs{display:flex;gap:8px;overflow-x:auto;padding:8px 0 10px}
+.thumb{position:relative;flex:none;width:76px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--bg)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .n{position:absolute;left:4px;top:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px}
+.thumb .rm{position:absolute;right:2px;top:2px;width:26px;height:26px;border:0;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:15px;line-height:1}
+.traybtns{display:grid;grid-template-columns:1fr 1.3fr;gap:8px}
+.big:disabled{opacity:.5}
+
 /* 품목 */
 .filters{display:flex;gap:6px;overflow-x:auto;padding:0 2px 8px;scrollbar-width:none}
 .filters::-webkit-scrollbar{display:none}
@@ -85,7 +97,7 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .prow2{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;margin-top:8px}
 .tog{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;padding:5px 10px;font-size:13px;color:var(--sub);background:none;white-space:nowrap}
 .tog.on{border-color:var(--acc);color:var(--acc);background:var(--acc-soft);font-weight:600}
-.bal{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub)}
+.bal{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);white-space:nowrap}
 .bal input{text-align:right}
 .pcalc{margin-top:8px;font-size:13px;display:flex;justify-content:space-between;gap:8px;background:var(--bg);border-radius:8px;padding:7px 10px;font-variant-numeric:tabular-nums}
 .pcalc b.neg{color:var(--bad)}
@@ -145,7 +157,15 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </div>
   <input type="file" id="camIn" accept="image/*" capture="environment" hidden>
   <input type="file" id="albIn" accept="image/*" multiple hidden>
-  <div class="status" id="status">표가 길면 여러 장 찍어도 돼요. 겹친 줄은 알아서 걸러요.</div>
+  <div class="card tray" id="tray" hidden>
+    <div class="trayhead"><b id="trayTitle">찍은 사진</b><button id="trayClear">모두 지우기</button></div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="traybtns">
+      <button class="big sec" id="moreBtn">📷 한 장 더</button>
+      <button class="big pri" id="readBtn">✨ AI로 읽기</button>
+    </div>
+  </div>
+  <div class="status" id="status">표가 길면 위에서부터 나눠서 다 찍은 다음 'AI로 읽기'를 누르세요. 겹친 줄은 알아서 걸러요.</div>
 
   <h2>주문 품목 <small id="itemCount"></small></h2>
   <div class="filters" id="filters"></div>
@@ -202,7 +222,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
     <button type="button" class="ghost" id="impBtn">백업 붙여넣기</button>
   </div>
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V3</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V4</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -500,7 +520,7 @@ function applyReport(plan){
 
 async function handleFiles(files){
   files=[...files]; if(!files.length) return;
-  if(!API_KEY){ setStatus('사진을 읽으려면 설정에서 Gemini 키를 먼저 넣어주세요.','err'); $('#setDlg').showModal(); return; }
+  if(!API_KEY){ setStatus('사진을 읽으려면 설정에서 Gemini 키를 먼저 넣어주세요.','err'); $('#setDlg').showModal(); return false; }
   let added=0, dups=0, none=0, report=null;
   for(let i=0;i<files.length;i++){
     setStatus(`사진 ${i+1}/${files.length} 읽는 중…`,'busy');
@@ -518,7 +538,7 @@ async function handleFiles(files){
         S.items.push(it); added++;
       });
     }catch(e){
-      setStatus(`사진 ${i+1}: ${e.message}`,'err'); toast(e.message); renderAll(); return;
+      setStatus(`사진 ${i+1}: ${e.message} (사진은 남겨뒀어요. 다시 눌러보세요)`,'err'); toast(e.message); renderAll(); return false;
     }
   }
   S.filter='all'; renderAll();
@@ -532,11 +552,38 @@ async function handleFiles(files){
   if(none) msg.push(`${none}장은 주문표나 정산 보고가 아니라서 건너뛰었어요.`);
   if(!added&&!report&&none){ setStatus(msg.join(' '),'err'); toast('주문표나 정산 보고 사진이 아니에요'); }
   else setStatus(msg.join(' '));
+  return true;
 }
+/* 사진 모아두기 → 다 찍고 한 번에 읽기 */
+let tray=[]; let reading=false;
+function renderTray(){
+  const t=$('#tray'); t.hidden=!tray.length;
+  $('#thumbs').innerHTML=tray.map((x,i)=>`<div class="thumb"><img src="${x.url}" alt="${i+1}번째 사진"><span class="n">${i+1}</span><button class="rm" data-rm="${i}" aria-label="${i+1}번째 사진 빼기">×</button></div>`).join('');
+  $('#trayTitle').textContent=`찍은 사진 ${tray.length}장`;
+  $('#readBtn').textContent=`✨ ${tray.length}장 AI로 읽기`;
+  $('#readBtn').disabled=$('#moreBtn').disabled=reading;
+}
+function addToTray(files){
+  [...files].forEach(f=>tray.push({file:f,url:URL.createObjectURL(f)}));
+  renderTray();
+  if(tray.length){ setStatus(`사진 ${tray.length}장 모았어요. 더 찍을 게 없으면 'AI로 읽기'를 누르세요.`); $('#tray').scrollIntoView({block:'nearest',behavior:'smooth'}); }
+}
+function clearTray(){ tray.forEach(x=>URL.revokeObjectURL(x.url)); tray=[]; renderTray(); }
 $('#camBtn').onclick=()=>$('#camIn').click();
+$('#moreBtn').onclick=()=>$('#camIn').click();
 $('#albBtn').onclick=()=>$('#albIn').click();
-$('#camIn').onchange=e=>{ handleFiles(e.target.files); e.target.value=''; };
-$('#albIn').onchange=e=>{ handleFiles(e.target.files); e.target.value=''; };
+$('#camIn').onchange=e=>{ addToTray(e.target.files); e.target.value=''; };
+$('#albIn').onchange=e=>{ addToTray(e.target.files); e.target.value=''; };
+$('#thumbs').onclick=e=>{ const b=e.target.closest('[data-rm]'); if(!b) return; const i=+b.dataset.rm; URL.revokeObjectURL(tray[i].url); tray.splice(i,1); renderTray(); setStatus(tray.length?`사진 ${tray.length}장 모았어요. 더 찍을 게 없으면 'AI로 읽기'를 누르세요.`:'사진을 모두 뺐어요.'); };
+$('#trayClear').onclick=()=>{ if(confirm('모아둔 사진을 모두 지울까요?')){ clearTray(); setStatus('사진을 모두 지웠어요.'); } };
+$('#readBtn').onclick=async()=>{
+  if(!tray.length||reading) return;
+  if(!API_KEY){ setStatus('사진을 읽으려면 설정에서 Gemini 키를 먼저 넣어주세요.','err'); $('#setDlg').showModal(); return; }
+  reading=true; renderTray();
+  const ok=await handleFiles(tray.map(x=>x.file));
+  reading=false;
+  if(ok) clearTray(); else renderTray();
+};
 
 /* ---------- 품목 이벤트 ---------- */
 $('#filters').onclick=e=>{ const b=e.target.closest('[data-f]'); if(!b) return; S.filter=b.dataset.f; renderItems(); save(); };
