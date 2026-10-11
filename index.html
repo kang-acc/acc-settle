@@ -85,6 +85,9 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .rvt span{display:block;font-size:12px;color:var(--sub)}
 .rvt .rvm{color:var(--ink);opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rva{flex:none;display:flex;align-items:center;gap:4px}
+.rvc{flex:none;max-width:32%;text-align:center;line-height:1.25;padding:0 2px}
+.rvc b{display:block;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rvc span{display:block;font-size:11px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rb{font-size:12px;font-weight:700;border-radius:8px;padding:3px 8px;white-space:nowrap;background:var(--bg);color:var(--sub)}
 .rb.ok{background:#E3F4EC;color:var(--ok)}
 .rb.miss{background:var(--bad);color:#fff}
@@ -329,7 +332,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9.5</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9.6</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -935,10 +938,14 @@ function renderResv(){
   };
   const row=r=>{
     const it=r.chk&&r.chk.item?S.items.find(x=>x.id===r.chk.item):null;
-    const sub=[r.qty>1?`${r.qty}개`:'',whoName(r.who),r.memo,new Date(r.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 예약'].filter(Boolean).join(' · ');
+    // 🔗 강CRM과 연결된 예약이면 가운데에 손님 이름 · 예약 잡은 담당자
+    const linked=!!(r.crm||r.crmPending||r.src==='crm');
+    const staff=whoName(r.who)||r.byName||'';
+    const mid=linked&&(r.cname||staff)?`<div class="rvc" data-redit>${r.cname?`<b>${esc(r.cname)}</b>`:''}${staff?`<span>담당 ${esc(staff)}</span>`:''}</div>`:'';
+    const sub=[r.qty>1?`${r.qty}개`:'',mid?'':whoName(r.who),r.memo,new Date(r.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 예약'].filter(Boolean).join(' · ');
     return `<div class="rv${r.chk&&r.chk.s==='missing'?' miss':''}" data-rid="${r.id}">
       <div class="rvt" data-redit><b>${esc(r.text)}</b><span>${esc(sub)}</span>
-      ${r.chk&&(it||r.chk.note)?`<span class="rvm">${it?'→ '+esc(it.name):''}${r.chk.note?(it?' · ':'')+esc(r.chk.note):''}</span>`:''}</div>
+      ${r.chk&&(it||r.chk.note)?`<span class="rvm">${it?'→ '+esc(it.name):''}${r.chk.note?(it?' · ':'')+esc(r.chk.note):''}</span>`:''}</div>${mid}
       <div class="rva">${r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">${r.src==='crm'?'📥 CRM에서 ':'📅 CRM '}${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')}${badge(r)}</div></div>`;
   };
   $('#resvList').innerHTML=st.P.length?st.P.map(row).join(''):'<div class="empty">손님이 예약한 악세를 적어두면, 주문표를 읽은 뒤 빠진 게 있는지 확인해 줘요.</div>';
@@ -1214,7 +1221,7 @@ async function pullCrm(quiet){
   if(crmPulling||!window.KCRM||$('#resvDlg').open) return; crmPulling=true;
   try{
     const names=G.stores.map(s=>s.name), sig=names.join('|');
-    let got=0, moved=0, gone=0;
+    let got=0, moved=0, gone=0, quietFix=0;
     for(const st of G.stores){
       if(!crmEmail(st.id)) continue;
       if(storesShared!==sig){ KCRM.shareStores(st.id,names); storesShared=sig; }
@@ -1231,9 +1238,10 @@ async function pullCrm(quiet){
         }
         const who=(D.people.find(p=>p.name&&e.by&&String(e.by).replace(/\s+/g,'').startsWith(p.name.replace(/\s+/g,'')))||{}).id||'';
         if(!r){
-          D.resv.unshift({id:nid(),at:Date.now(),status:'wait',text:e.memo,qty:1,who,memo:'',cname:e.name,phone:e.id,pickup:e.date,src:'crm',crmKey:e.key,crm:{id:e.id,date:e.date,line:e.memo,at:Date.now()}});
+          D.resv.unshift({id:nid(),at:Date.now(),status:'wait',text:e.memo,qty:1,who,byName:e.by||'',memo:'',cname:e.name,phone:e.id,pickup:e.date,src:'crm',crmKey:e.key,crm:{id:e.id,date:e.date,line:e.memo,at:Date.now()}});
           got++;
-        } else if(r.status==='wait'&&(r.text!==e.memo||r.pickup!==e.date||r.phone!==e.id)){
+        } else if(r.status==='wait'&&!r.byName&&e.by){ r.byName=e.by; quietFix++; }
+        if(r&&r.status==='wait'&&(r.text!==e.memo||r.pickup!==e.date||r.phone!==e.id)){
           Object.assign(r,{text:e.memo,qty:1,memo:'',pickup:e.date,phone:e.id,cname:e.name||r.cname,crm:{id:e.id,date:e.date,line:e.memo,at:Date.now()}});
           moved++;
         }
@@ -1250,6 +1258,7 @@ async function pullCrm(quiet){
         gone+=before-D.resv.length;
       }
     }
+    if(quietFix&&!(got||moved||gone)){ S=G.stores[G.cur].data; save(); renderResv(); }
     if(got||moved||gone){ S=G.stores[G.cur].data; save(); renderResv(); update(); if(!quiet||got) toast([got?`강CRM에서 악세 예약 ${got}건 가져왔어요`:'',moved?`${moved}건 바뀜`:'',gone?`${gone}건 정리`:''].filter(Boolean).join(' · ')); }
   } finally { crmPulling=false; }
 }
