@@ -332,7 +332,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9.6</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V9.7</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -1256,6 +1256,7 @@ async function pullCrm(quiet){
         const before=D.resv.length;
         D.resv=D.resv.filter(r=>!drop.has(r));
         gone+=before-D.resv.length;
+        miss.forEach(r=>{ const p=peek[r.phone]; if(p&&p.movedTo&&!drop.has(r)){ r.phone=p.movedTo; if(r.crm) r.crm.id=p.movedTo; moved++; } });   // 강CRM에서 번호를 바꾼 손님 → 새 번호로
       }
     }
     if(quietFix&&!(got||moved||gone)){ S=G.stores[G.cur].data; save(); renderResv(); }
@@ -1303,6 +1304,15 @@ function slot(id) {
 const why = (e) => { const c = String((e && e.code) || ''); if (/unauthorized-domain/.test(c)) return `이 주소(${location.hostname})가 Firebase 승인된 도메인에 없어요. Firebase → Authentication → 설정 → 승인된 도메인에 추가해 주세요`; if (/popup-blocked/.test(c)) return '팝업이 막혔어요. 브라우저 주소창의 팝업 허용을 눌러주세요'; if (/api-key|invalid-api-key|requests-from-referer|referer/i.test(c + (e && e.message))) return `Firebase 키가 이 주소(${location.hostname})를 막고 있어요 (구글 클라우드 API 키 제한 확인)`; if (/internal-error/.test(c)) return '구글 로그인 설정 문제예요 (승인된 도메인 확인)'; if (/permission-denied/.test(c)) return '강CRM에 등록된 직원 계정이 아니에요'; if (/network/.test(c)) return '인터넷 연결을 확인해 주세요'; if (/popup-closed|cancelled-popup/.test(c)) return '로그인 창이 닫혔어요'; return (e && e.message) || '문제가 생겼어요'; };
 // 열 때 모든 매장의 로그인 상태를 미리 불러옴
 try { (window.ACC_STORE_IDS ? window.ACC_STORE_IDS() : []).forEach(id => slot(id)); } catch (e) {}
+// 📱 강CRM에서 번호를 바꾼 손님: 예전 번호(prevIds)로 새 번호 카드를 찾음 (예전: 옛 번호로 빈 카드가 새로 생겼음)
+async function movedCustomer(db, id) {
+  try {
+    const snap = await getDocs(query(collection(db, 'smart_customers'), where('prevIds', 'array-contains', id)));
+    const d = snap.docs.find(x => !x.data().deletedAt) || snap.docs[0];
+    return d ? { id: d.id, data: d.data() } : null;
+  } catch (e) { return null; }
+}
+const sameName = (a, b) => { const x = String(a || '').replace(/\s/g, ''), y = String(b || '').replace(/\s/g, ''); return !x || !y || x === y || x.includes(y) || y.includes(x); };
 window.KCRM = {
   email: (id) => { const sl = slot(id); return (sl.user && sl.user.email) || ''; },
   async login(id) {
@@ -1334,9 +1344,10 @@ window.KCRM = {
       const id = String(raw || '').replace(/\D/g, '');
       if (!/^01\d{8,9}$/.test(id)) continue;
       const snap = await getDoc(doc(sl.db, 'smart_customers', id));
-      if (!snap.exists()) { out[raw] = null; continue; }
-      const c = snap.data();
-      out[raw] = { date: String(c.promAccDate || '').slice(0, 10), memo: String(c.promAccMemo || ''), chk: !!c.promAccChk, store: c.promAccStore || '', deleted: !!c.deletedAt };
+      let c = snap.exists() ? snap.data() : null, moved = '';
+      if (!c) { const m = await movedCustomer(sl.db, id); if (m) { c = m.data; moved = m.id; } }
+      if (!c) { out[raw] = null; continue; }
+      out[raw] = { ...(moved ? { movedTo: moved } : {}), date: String(c.promAccDate || '').slice(0, 10), memo: String(c.promAccMemo || ''), chk: !!c.promAccChk, store: c.promAccStore || '', deleted: !!c.deletedAt };
     }
     return out;
   },
@@ -1352,11 +1363,11 @@ window.KCRM = {
     if (!user) throw new Error('강CRM 로그인이 필요해요');
     const id = String(x.phone || '').replace(/\D/g, '');
     if (!/^01\d{8,9}$/.test(id)) return 'none';
-    const ref = doc(db, 'smart_customers', id);
+    let ref = doc(db, 'smart_customers', id);
     let snap;
     try { snap = await getDoc(ref); } catch (e) { throw new Error(why(e)); }
-    if (!snap.exists()) return 'none';
-    const c = snap.data();
+    let c = snap.exists() ? snap.data() : null;
+    if (!c) { const m = await movedCustomer(db, id); if (!m) return 'none'; ref = doc(db, 'smart_customers', m.id); c = m.data; }
     if (!c.promAccDate && !c.promAccMemo) return 'none';
     if (c.promAccChk) return 'none';                                   // 이미 찾아간(체크된) 기록은 그대로 둠
     const segs = String(c.promAccMemo || '').split(' + ');
@@ -1378,13 +1389,17 @@ window.KCRM = {
     if (!user) throw new Error('강CRM 로그인이 필요해요');
     const id = String(r.phone || '').replace(/\D/g, '');
     if (!/^01\d{8,9}$/.test(id)) throw new Error('손님 번호가 올바르지 않아요');
-    const ref = doc(db, 'smart_customers', id);
+    let ref = doc(db, 'smart_customers', id);
     const now = new Date().toISOString(), today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
     const line = `${r.text}${r.qty > 1 ? ' ' + r.qty + '개' : ''}${r.memo ? ' (' + r.memo + ')' : ''}`;
     const staff = r.staff || user.email.split('@')[0];
     let snap;
     try { snap = await getDoc(ref); } catch (e) { throw new Error(why(e)); }
-    const c = snap.exists() ? snap.data() : null;
+    let c = snap.exists() ? snap.data() : null;
+    if (!c) {   // 번호를 바꾼 손님이면 새 번호 카드에 (이름이 다르면 번호가 다른 분께 넘어간 것 → 새로 등록)
+      const m = await movedCustomer(db, id);
+      if (m && sameName(m.data.name, r.name)) { ref = doc(db, 'smart_customers', m.id); c = m.data; }
+    }
     let date = r.date, memo = `${line} · ${r.store} 악세정산`;
     if (c && c.promAccDate && !c.promAccChk && c.promAccMemo) {
       // 아직 안 찾아간 악세 예약이 있으면 합쳐서 (같은 예약의 예전 줄은 빼고 · 날짜는 빠른 쪽)
