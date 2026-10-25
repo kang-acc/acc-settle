@@ -134,6 +134,16 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .ags .bad{color:var(--bad);font-weight:600}
 .ags .mini-btn{margin-left:auto}
 #arrHint div{font-size:12px;color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:6px 9px;margin-top:6px}
+.chseg{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--sub)}
+.chseg span{flex-basis:100%}
+.chseg button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 4px;font-size:13px;font-weight:600}
+.chseg button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.chrow{display:flex;gap:6px;margin:0 0 6px}
+.chb{border:1px solid var(--line);background:var(--card);color:var(--sub);border-radius:16px;padding:4px 11px;font-size:13px;font-weight:600}
+.chb.on{background:var(--acc-soft);border-color:var(--acc);color:var(--acc)}
+.chb.sent{border-color:var(--ok);color:var(--ok);background:none}
+.chb:disabled:not(.sent){opacity:.5}
+.chb small{font-size:11px;font-weight:400}
 .rstage{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg);border-radius:10px;padding:8px 10px;margin-top:10px;font-size:13px}
 
 /* 사진 모음 */
@@ -355,7 +365,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <details class="acc" id="accArr">
-    <summary><span>📨 도착 문자</span><small id="sumArr"></small></summary>
+    <summary><span>📨 도착 문자·푸시</span><small id="sumArr"></small></summary>
     <div class="accb">
       <label for="smsStore">문자에 쓸 매장 이름 (이 매장)</label>
       <input id="smsStore" placeholder="비우면 강CRM 문자 매장 이름">
@@ -365,10 +375,11 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
       <textarea id="tplRem" rows="6"></textarea>
       <div class="hint">바꿔 쓰는 말: {이름} {매장} {품목} {담당자} {담당번호} · 담당자는 예약 받은 사람이고, 번호는 강CRM 직원 공용 명함에서 가져와요. 번호가 없으면 그 자리는 비워요. 명함 링크는 문구 뒤에 붙어요.</div>
       <button type="button" class="ghost" id="tplArrReset" style="margin-top:6px;width:100%">기본 문구로 되돌리기</button>
-      <label for="relayPwIn">문자 중계 서버 비밀번호 (모든 매장 · 이 폰에만)</label>
+      <label for="relayPwIn">중계 서버 비밀번호 (문자·푸시 · 모든 매장 · 이 폰에만)</label>
       <input id="relayPwIn" type="password" autocomplete="off" placeholder="강CRM 설정의 중계 서버 비밀번호">
-      <div class="hint">강CRM 설정 → 자동 알림 서버에 넣은 비밀번호와 같아요. 넣으면 매장 폰(SMSGate)으로 바로 보내지고, 없으면 문자앱으로 하나씩 보내요.</div>
+      <div class="hint">강CRM 설정 → 자동 알림 서버에 넣은 비밀번호와 같아요. 넣으면 문자는 매장 폰(SMSGate)으로, 푸시는 명함 알림으로 바로 나가고, 없으면 문자앱으로 하나씩 보내요.</div>
       <button type="button" class="ghost chk" id="relayTest" style="margin-top:6px;width:100%">🩺 연결 확인</button>
+      <div style="display:flex;gap:8px;margin-top:8px"><input id="relayTestTo" type="tel" inputmode="tel" placeholder="시험 받을 번호 (내 폰)" autocomplete="off"><button type="button" class="ghost" id="relayTestSend" style="flex:none;padding:8px 12px">시험 문자</button></div>
       <div class="status" id="relayMsg" role="status" style="margin:8px 0 0"></div>
     </div>
   </details>
@@ -399,7 +410,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V11.0</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V11.1</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -445,6 +456,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
 <dialog id="arrDlg"><form method="dialog" class="sheet">
   <h3 id="arrTitle">📦 도착 처리</h3>
   <div id="arrHint"></div>
+  <div class="chseg" id="arrCh" hidden role="group" aria-label="보내는 방법"><span>보내는 방법</span><button type="button" data-chall="both">💬+🔔 같이</button><button type="button" data-chall="sms">💬 문자만</button><button type="button" data-chall="push">🔔 푸시만</button></div>
   <div id="arrPick"></div>
   <label class="crmchk" style="margin-top:12px"><input type="checkbox" id="arrCard"> 담당자 명함 링크 같이 보내기</label>
   <div id="arrMsgs"></div>
@@ -1037,7 +1049,7 @@ function renderResv(){
     const s=stOf(r);
     if(s==='wait') return `<button type="button" class="sbtn" data-ract="order">✓ 주문완료</button>`;
     if(s==='ordered') return `<button type="button" class="sbtn" data-ract="unorder" aria-label="예약으로 되돌리기">↩</button><button type="button" class="sbtn pri" data-ract="arrive">📦 도착 · 문자</button>`;
-    if(s==='arrived') return `<button type="button" class="sbtn" data-ract="resend">💬 다시 문자</button><button type="button" class="sbtn pri" data-ract="pick">🛍️ 찾아감</button>`;
+    if(s==='arrived') return `<button type="button" class="sbtn" data-ract="resend">💬 다시 안내</button><button type="button" class="sbtn pri" data-ract="pick">🛍️ 찾아감</button>`;
     return '';
   };
   const row=r=>{
@@ -1046,7 +1058,7 @@ function renderResv(){
     const linked=!!(r.crm||r.crmPending||r.src==='crm');
     const staff=whoName(r.who)||r.byName||'';
     const mid=(linked||s!=='wait')&&(r.cname||staff)?`<div class="rvc" data-redit>${r.cname?`<b>${esc(r.cname)}</b>`:''}${staff?`<span>담당 ${esc(staff)}</span>`:''}</div>`:'';
-    const when=s==='arrived'?(r.smsAt?`문자 보냄 ${hm(r.smsAt)}${r.smsN>1?` (${r.smsN}번)`:''}`:'문자 안 보냄'):(s==='ordered'?(r.orderTitle&&r.orderTitle!=='직접 체크'?r.orderTitle+'에 주문':''):'');
+    const when=s==='arrived'?(r.smsAt?`${[r.smsN?'문자':'',r.pushAt?'푸시':''].filter(Boolean).join('·')||'연락'} 보냄 ${hm(r.smsAt)}${r.smsN>1?` (문자 ${r.smsN}번)`:''}`:'연락 안 보냄'):(s==='ordered'?(r.orderTitle&&r.orderTitle!=='직접 체크'?r.orderTitle+'에 주문':''):'');
     const sub=[r.qty>1?`${r.qty}개`:'',mid?'':whoName(r.who),r.memo,s==='wait'?new Date(r.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 예약':when].filter(Boolean).join(' · ');
     const crmB=s==='wait'?(r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">${r.src==='crm'?'📥 CRM에서 ':'📅 CRM '}${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')):'';
     return `<div class="rv${s==='wait'&&r.chk&&r.chk.s==='missing'?' miss':''}${s==='arrived'&&daysSince(r.arrivedAt||Date.now())>=3?' late':''}" data-rid="${r.id}">
@@ -1239,23 +1251,54 @@ function fillArr(tpl,g){
   if(cardOn()&&g.link) t+=`\n\n📇 ${g.sc.label||g.store} 명함\n${g.link}`;
   return t;
 }
-async function relaySend(url,body){
-  let res;
-  try{ res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,password:relayPw()})}); }
-  catch(e){ throw new Error('중계 서버에 연결하지 못했어요 (인터넷 또는 서버 설정)'); }
+/* 🔌 중계 서버 부르기 (V11.1)
+   · 가장 단순한 요청(text/plain)으로 보냄 → 서버가 '사전 확인(OPTIONS)'을 막아도 닿아요
+   · 그래도 응답을 못 읽으면(서버가 강CRM 주소만 허용) '결과 확인 없이 보내기'로 (보내기는 되지만 성공 여부는 매장 폰에서 확인)
+   · 보내기는 절대 두 번 다시 보내지 않음 (응답만 못 읽은 경우에도 이미 나갔을 수 있어서) */
+let RELAY_MODE=null;   // 'cors' = 결과 확인됨 · 'blind' = 결과 확인 없이
+function relayOpt(body){ return {method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({...body,password:relayPw()})}; }
+async function relayFetch(url,body,mode){
+  if(mode==='blind'){
+    try{ await fetch(url,{...relayOpt(body),mode:'no-cors'}); }catch(e){ throw new Error('중계 서버에 닿지 않아요 (인터넷 확인)'); }
+    return {ok:true,blind:true};
+  }
+  let res; try{ res=await fetch(url,relayOpt(body)); }catch(e){ const er=new Error('중계 서버 응답을 읽지 못했어요'); er.net=true; throw er; }
   let d=null; try{ d=await res.json(); }catch(e){ d=null; }
-  if(!res.ok||!d||!d.ok) throw new Error((d&&d.error)||`중계 서버 응답 오류 (${res.status})`);
+  if(!res.ok||!d||!d.ok){ const er=new Error((d&&d.error)||`중계 서버 응답 오류 (${res.status})`); er.http=true; throw er; }
   return d;
 }
+async function relayProbe(url){
+  try{ const d=await relayFetch(url,{sms:'status'},'cors'); RELAY_MODE='cors'; return {mode:'cors',d}; }
+  catch(e){
+    if(e.http) throw e;   // 서버가 대답은 했는데 거절 (비밀번호 등)
+    try{ await fetch(url,{...relayOpt({sms:'status'}),mode:'no-cors'}); RELAY_MODE='blind'; return {mode:'blind'}; }
+    catch(e2){ throw new Error('중계 서버에 닿지 않아요. 인터넷이나 강CRM의 서버 주소를 확인해 주세요'); }
+  }
+}
+async function relaySend(url,body){ if(!RELAY_MODE) await relayProbe(url); return relayFetch(url,body,RELAY_MODE); }
 const smsHrefA=(to,text)=>`sms:${to}${/iPhone|iPad|iPod/.test(navigator.userAgent)?'&':'?'}body=${encodeURIComponent(text)}`;
 const smsStoreName=info=>String(S.smsStore||'').trim()||(info&&info.storeName)||curStore().name;
+// 🔔 푸시: 명함을 설치하고 알림을 켠 손님만 (강CRM '한 명에게 푸시'와 같은 방식 · 누르면 명함이 열리고 같은 내용이 창으로 떠요)
+const pushOk=g=>!!(g.cust&&g.cust.push&&g.cust.cardId);
+function pushUrlFor(g,heading,body){
+  const base=cardUrl(g.sc,g.cust.cardId);
+  try{
+    const j=JSON.stringify({id:('a'+Date.now().toString(36)).slice(0,20),h:String(heading).slice(0,60),b:String(body).slice(0,300),i:''});
+    return base+'#pn='+btoa(unescape(encodeURIComponent(j))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }catch(e){ return base; }
+}
+function pushTextFor(g){   // 푸시 내용 = 문자 내용에서 명함 링크 줄은 빼고 (알림을 누르면 명함이 열려서)
+  return String(g.text||'').replace(/\n*📇[^\n]*\n?https?:\/\/\S+\s*$/,'').trim().slice(0,300);
+}
+const CH_KEY='acc-arr-ch';   // 'both' | 'sms' | 'push'
+const chDefault=()=>{ try{ const v=localStorage.getItem(CH_KEY); return ['both','sms','push'].includes(v)?v:'both'; }catch(e){ return 'both'; } };
 
 // 📦 도착 창
-let ARR=null;   // {mode, sid, ids:Set, info, groups:[], loading}
+let ARR=null;   // {mode, sid, ids:Set, info, groups:[], loading, ch:{key:{s,p}}}
 function arrPool(){ return ARR.mode==='resend'?S.resv.filter(r=>ARR.ids.has(r.id)):S.resv.filter(r=>stOf(r)==='ordered'||ARR.ids.has(r.id)); }
 async function openArrival(rid,mode){
-  ARR={mode,sid:curStore().id,ids:new Set([rid]),info:null,groups:[],edited:{},loading:false,err:''};
-  $('#arrTitle').textContent=mode==='resend'?'💬 다시 안내 문자':'📦 도착 처리';
+  ARR={mode,sid:curStore().id,ids:new Set([rid]),info:null,groups:[],edited:{},loading:false,err:'',ch:{},chAll:chDefault()};
+  $('#arrTitle').textContent=mode==='resend'?'💬 다시 안내':'📦 도착 처리';
   $('#arrCard').checked=cardOn();
   $('#arrMsg').textContent=''; $('#arrMsg').className='status';
   $('#arrDlg').showModal();
@@ -1275,6 +1318,13 @@ async function arrLoad(){
   }
   arrRender();
 }
+function arrChOf(g){   // 이 손님에게 보낼 방법 {s: 문자, p: 푸시}
+  const o=ARR.ch[g.key];
+  if(o) return {s:!!(o.s&&g.phone), p:!!(o.p&&pushOk(g))};
+  const a=ARR.chAll;
+  const s=!!g.phone&&(a!=='push'||!pushOk(g)), p=pushOk(g)&&a!=='sms';   // '푸시만'인데 알림을 안 받는 손님은 문자로
+  return {s,p};
+}
 function arrGroups(){
   const info=ARR.info, store=smsStoreName(info), by=new Map();
   arrPool().filter(r=>ARR.ids.has(r.id)).forEach(r=>{ const k=okTel(r.phone)?r.phone:'none:'+r.id; if(!by.has(k)) by.set(k,[]); by.get(k).push(r); });
@@ -1286,95 +1336,122 @@ function arrGroups(){
     const link=info?cardUrl(sc,cust&&cust.cardId):'';
     const g={key:k,phone,cust,name,items,store,sc,link,staffName};
     g.text=ARR.edited[k]!==undefined?ARR.edited[k]:fillArr(ARR.mode==='resend'?(S.tplRem||REM_TPL):(S.tplArr||ARR_TPL),g);
-    const old=(ARR.groups||[]).find(x=>x.key===k); if(old){ g.sent=old.sent; g.fail=old.fail; }
+    const old=(ARR.groups||[]).find(x=>x.key===k); if(old){ g.res=old.res; g.fail=old.fail; }
+    g.res=g.res||{}; g.fail=g.fail||{};
     return g;
   });
 }
+const gDone=g=>{ const c=arrChOf(g); return (!c.s||g.res.s)&&(!c.p||g.res.p)&&(c.s||c.p); };
 function arrRender(){
   if(!ARR) return;
   const pool=arrPool(), info=ARR.info, relayOk=!!(info&&info.relayUrl&&relayPw());
   const hint=[];
-  if(ARR.loading) hint.push('강CRM에서 담당자·명함 정보를 불러오는 중…');
-  else if(!window.KCRM||!crmEmail(ARR.sid)) hint.push(`🔗 ${curStore().name} 강CRM 로그인이 안 돼 있어서 담당자 번호·명함 링크 없이 보내고, 고객 카드에 기록이 안 남아요.`);
+  if(ARR.loading) hint.push('강CRM에서 담당자·명함·알림 정보를 불러오는 중…');
+  else if(!window.KCRM||!crmEmail(ARR.sid)) hint.push(`🔗 ${curStore().name} 강CRM 로그인이 안 돼 있어서 담당자 번호·명함 링크·푸시 없이 문자앱으로 보내고, 고객 카드에 기록이 안 남아요.`);
   else if(ARR.err) hint.push('강CRM 정보를 못 불러왔어요: '+ARR.err);
-  if(!ARR.loading&&info&&!relayOk) hint.push(info.relayUrl?'⚙ → 📨 도착 문자에 중계 서버 비밀번호를 넣으면 버튼 한 번에 매장 폰으로 보내져요. 지금은 문자앱으로 하나씩 보내요.':'강CRM에 중계 서버 주소가 없어서 문자앱으로 하나씩 보내요.');
-  if(!ARR.loading&&!info&&!(window.KCRM&&crmEmail(ARR.sid))) hint.push('지금은 문자앱으로 하나씩 보내요.');
+  if(!ARR.loading&&info&&!relayOk) hint.push(info.relayUrl?'⚙ → 📨 도착 문자에 중계 서버 비밀번호를 넣으면 문자·푸시가 버튼 한 번에 나가요. 지금은 문자앱으로 하나씩 보내요.':'강CRM에 중계 서버 주소가 없어서 문자앱으로 하나씩 보내요.');
+  if(!ARR.loading&&relayOk&&RELAY_MODE==='blind') hint.push('중계 서버가 이 앱 주소의 결과 응답을 막고 있어서, 보내기는 되지만 성공 여부는 확인할 수 없어요. (⚙ → 📨 도착 문자 → 🩺 연결 확인)');
   $('#arrHint').innerHTML=hint.map(h=>`<div>${esc(h)}</div>`).join('');
+  // 보내는 방법 (모두에게 한 번에 · 손님마다 따로 바꿀 수 있어요)
+  const anyPush=relayOk&&ARR.groups&&ARR.groups.some(pushOk)||relayOk&&info&&Object.values(info.customers||{}).some(c=>c&&c.push&&c.cardId);
+  $('#arrCh').hidden=!anyPush;
+  $('#arrCh').querySelectorAll('[data-chall]').forEach(b=>{ const on=b.dataset.chall===ARR.chAll; b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); });
   // 고르기 (도착 처리일 때만 · 주문완료 예약 모두)
   $('#arrPick').hidden=ARR.mode==='resend'||pool.length<2;
   $('#arrPick').innerHTML=ARR.mode==='resend'?'':`<div class="hint" style="margin:10px 0 4px">같이 도착한 것도 고르세요</div>`+pool.map(r=>`<label class="apick"><input type="checkbox" data-aid="${r.id}"${ARR.ids.has(r.id)?' checked':''}> <span><b>${esc(r.text)}</b>${r.qty>1?` ${r.qty}개`:''}<small>${esc([r.cname,okTel(r.phone)?fmtTel(r.phone):'번호 없음'].filter(Boolean).join(' · '))}</small></span></label>`).join('');
   ARR.groups=arrGroups();
   const G2=ARR.groups;
-  $('#arrMsgs').innerHTML=G2.length?G2.map(g=>`<div class="agrp${g.sent?' sent':''}" data-g="${esc(g.key)}">
-    <div class="agh"><b>${esc(g.name?msgNameA(g.name)+'님':'이름 없음')}</b><span>${g.phone?esc(fmtTel(g.phone)):'번호 없음 · 문자 없이 도착만 체크'}</span></div>
+  const chip=(g,k,label,ok,why)=>{ const c=arrChOf(g), on=k==='s'?c.s:c.p, sent=g.res[k];
+    return `<button type="button" class="chb${on?' on':''}${sent?' sent':''}" data-gch="${esc(g.key)}|${k}"${!ok||sent?' disabled':''} aria-pressed="${on}" title="${esc(why||'')}">${sent?'✅ ':''}${label}${!ok&&why?` <small>${esc(why)}</small>`:''}</button>`; };
+  $('#arrMsgs').innerHTML=G2.length?G2.map(g=>{ const done=gDone(g), c=arrChOf(g);
+    const resTxt=[g.res.s?'💬 '+g.res.s:'',g.res.p?'🔔 '+g.res.p:''].filter(Boolean).join(' · ');
+    const failTxt=[g.fail.s?'💬 '+g.fail.s:'',g.fail.p?'🔔 '+g.fail.p:''].filter(Boolean).join(' · ');
+    return `<div class="agrp${done?' sent':''}" data-g="${esc(g.key)}">
+    <div class="agh"><b>${esc(g.name?msgNameA(g.name)+'님':'이름 없음')}</b><span>${g.phone?esc(fmtTel(g.phone)):'번호 없음 · 연락 없이 도착만 체크'}</span></div>
     ${g.phone?`<div class="agm">${esc([g.sc.label?'담당 '+g.sc.label+(g.sc.phone?' '+g.sc.phone:' (번호 없음)'):'담당자 없음',info&&!g.cust?'강CRM에 없는 번호':''].filter(Boolean).join(' · '))}</div>
-    <textarea data-gt="${esc(g.key)}" rows="${Math.min(12,g.text.split('\n').length+1)}"${g.sent?' readonly':''}>${esc(g.text)}</textarea>
-    <div class="ags">${g.sent?`<span class="okt">✅ ${esc(g.sent)}</span>`:(g.fail?`<span class="bad">⚠️ ${esc(g.fail)}</span>`:'')}${!g.sent?`<a class="mini-btn" href="${smsHrefA(g.phone,g.text)}" data-gsms="${esc(g.key)}">💬 문자앱으로</a>`:''}</div>`:''}
-  </div>`).join(''):'<div class="empty">도착한 예약을 골라주세요.</div>';
+    ${relayOk?`<div class="chrow">${chip(g,'s','💬 문자',!!g.phone,'')}${chip(g,'p','🔔 푸시',pushOk(g),g.cust?'알림 안 받음':'강CRM에 없음')}</div>`:''}
+    <textarea data-gt="${esc(g.key)}" rows="${Math.min(12,g.text.split('\n').length+1)}"${done?' readonly':''}>${esc(g.text)}</textarea>
+    ${c.p&&!g.res.p?`<div class="agm">🔔 푸시는 명함 링크 줄을 빼고 보내요 (알림을 누르면 명함이 열려요)</div>`:''}
+    <div class="ags">${resTxt?`<span class="okt">✅ ${esc(resTxt)}</span>`:''}${failTxt?`<span class="bad">⚠️ ${esc(failTxt)}</span>`:''}${!g.res.s?`<a class="mini-btn" href="${smsHrefA(g.phone,g.text)}" data-gsms="${esc(g.key)}">💬 문자앱으로</a>`:''}</div>`:''}
+  </div>`; }).join(''):'<div class="empty">도착한 예약을 골라주세요.</div>';
   document.querySelectorAll('#arrMsgs textarea').forEach(fitTa);
-  const nPhone=G2.filter(g=>g.phone&&!g.sent).length;
+  const todo=G2.filter(g=>g.phone&&!gDone(g));
+  const nS=todo.filter(g=>arrChOf(g).s&&!g.res.s).length, nP=todo.filter(g=>arrChOf(g).p&&!g.res.p).length;
   const sendB=$('#arrSend'), onlyB=$('#arrOnly');
   onlyB.hidden=ARR.mode==='resend';
-  sendB.hidden=!nPhone||!relayOk;
-  sendB.textContent=ARR.mode==='resend'?`문자 보내기 (${nPhone}명)`:`도착 체크 + 문자 보내기 (${nPhone}명)`;
+  sendB.hidden=!(nS+nP)||!relayOk;
+  const what=[nS?`문자 ${nS}`:'',nP?`푸시 ${nP}`:''].filter(Boolean).join(' · ');
+  sendB.textContent=ARR.mode==='resend'?`보내기 (${what})`:`도착 체크 + 보내기 (${what})`;
   sendB.disabled=ARR.loading;
-  onlyB.textContent=nPhone&&!relayOk?'도착 체크 (문자는 위에서 문자앱으로)':'도착만 체크';
+  onlyB.textContent=todo.length&&!relayOk?'도착 체크 (문자는 위에서 문자앱으로)':'도착만 체크';
 }
 function fitTa(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight+4,420)+'px'; }
 function arrMarkArrived(items){
   const now=Date.now();
   items.forEach(r=>{ if(stOf(r)!=='arrived'&&stOf(r)!=='picked'){ r.status='arrived'; r.arrivedAt=now; } });
 }
-async function arrAfterSent(g,how){
+// 한 가지 방법(문자 s / 푸시 p)으로 보낸 뒤: 도착 체크 · 보낸 표시 · 강CRM 기록
+async function arrAfterSent(g,k,how,text){
   const now=Date.now();
   if(ARR.mode!=='resend') arrMarkArrived(g.items);
-  g.items.forEach(r=>{ r.smsAt=now; r.smsN=(r.smsN||0)+1; });
-  g.sent=how;
+  g.items.forEach(r=>{ r.smsAt=now; r.smsN=(r.smsN||0)+(k==='s'?1:0); if(k==='p') r.pushAt=now; });
+  g.res[k]=how; delete g.fail[k];
   save(); renderResv();
   if(g.cust&&window.KCRM&&crmEmail(ARR.sid)){
-    try{ await KCRM.logContact(ARR.sid,g.cust.id,{by:ARR.info&&ARR.info.me,label:'악세',action:ARR.mode==='resend'?'💬 문자발송 · 악세 다시 안내':'💬 문자발송 · 악세 도착',sms:g.text}); }
-    catch(e){ console.warn('강CRM 기록 실패',e); g.sent+=' (강CRM 기록은 못 남김)'; }
+    const what=ARR.mode==='resend'?'악세 다시 안내':'악세 도착';
+    try{ await KCRM.logContact(ARR.sid,g.cust.id,{by:ARR.info&&ARR.info.me,label:'악세',action:k==='s'?`💬 문자발송 · ${what}`:`🔔 푸시발송 · ${what}`,sms:k==='s'?text:''}); }
+    catch(e){ console.warn('강CRM 기록 실패',e); g.res[k]+=' (강CRM 기록은 못 남김)'; }
   }
 }
 $('#arrPick').addEventListener('change',e=>{ const b=e.target.closest('[data-aid]'); if(!b) return; b.checked?ARR.ids.add(b.dataset.aid):ARR.ids.delete(b.dataset.aid); const need=[...ARR.ids].map(id=>S.resv.find(r=>r.id===id)).filter(r=>r&&okTel(r.phone)&&!(ARR.info&&ARR.info.customers&&r.phone in ARR.info.customers)); if(need.length&&crmEmail(ARR.sid)) arrLoad(); else arrRender(); });
+$('#arrCh').addEventListener('click',e=>{ const b=e.target.closest('[data-chall]'); if(!b) return; ARR.chAll=b.dataset.chall; ARR.ch={}; try{ localStorage.setItem(CH_KEY,ARR.chAll); }catch(err){} arrRender(); });
 $('#arrMsgs').addEventListener('input',e=>{ const t=e.target.closest('[data-gt]'); if(!t) return; fitTa(t); ARR.edited[t.dataset.gt]=t.value; const g=ARR.groups.find(x=>x.key===t.dataset.gt); if(g){ g.text=t.value; const a=t.closest('.agrp').querySelector('[data-gsms]'); if(a) a.href=smsHrefA(g.phone,g.text); } });
 $('#arrMsgs').addEventListener('click',e=>{
+  const cb=e.target.closest('[data-gch]');
+  if(cb){ const [key,k]=cb.dataset.gch.split('|'); const g=ARR.groups.find(x=>x.key===key); if(!g) return; const c=arrChOf(g); c[k]=!c[k]; ARR.ch[key]=c; arrRender(); return; }
   const a=e.target.closest('[data-gsms]'); if(!a) return;
   const g=ARR.groups.find(x=>x.key===a.dataset.gsms); if(!g) return;
   a.href=smsHrefA(g.phone,g.text);   // 문자앱이 바로 열려요 (문자앱에서 [보내기]를 눌러주세요) → 보낸 것으로 기록
-  const mode=ARR.mode;
-  setTimeout(()=>{ if(ARR&&ARR.groups.includes(g)) arrAfterSent(g,mode==='resend'?'문자앱으로 다시 안내':'문자앱으로 보냄').then(()=>{ if(ARR) arrRender(); }); },300);
+  const mode=ARR.mode, text=g.text;
+  setTimeout(()=>{ if(ARR&&ARR.groups.includes(g)) arrAfterSent(g,'s',mode==='resend'?'문자앱으로 다시 안내':'문자앱으로 보냄',text).then(()=>{ if(ARR) arrRender(); }); },300);
 });
 $('#arrCard').addEventListener('change',e=>{ try{ localStorage.setItem('acc-arr-card',e.target.checked?'1':'0'); }catch(err){} ARR.edited={}; arrRender(); });
 $('#arrOnly').onclick=()=>{
   const items=arrPool().filter(r=>ARR.ids.has(r.id));
   if(!items.length){ toast('도착한 예약을 골라주세요'); return; }
-  const unsent=ARR.groups.filter(g=>g.phone&&!g.sent);
+  const unsent=ARR.groups.filter(g=>g.phone&&!g.res.s&&!g.res.p);
   arrMarkArrived(items); save();
   $('#arrDlg').close();
-  toast(unsent.length?`도착 체크했어요 · 문자는 안 보냈어요 (${unsent.length}명)`:`도착 체크했어요 (${items.length}개)`);
+  toast(unsent.length?`도착 체크했어요 · 연락은 안 보냈어요 (${unsent.length}명)`:`도착 체크했어요 (${items.length}개)`);
 };
 $('#arrSend').onclick=async()=>{
-  const list=ARR.groups.filter(g=>g.phone&&!g.sent);
-  if(!list.length) return;
-  const empty=list.find(g=>!g.text.trim()); if(empty){ toast('문자 내용이 비어 있어요'); return; }
-  if(!confirm(`${list.length}명에게 문자를 보낼까요?\n매장 폰으로 바로 나가요.`)) return;
+  const jobs=[];
+  ARR.groups.filter(g=>g.phone).forEach(g=>{ const c=arrChOf(g); if(c.s&&!g.res.s) jobs.push([g,'s']); if(c.p&&!g.res.p) jobs.push([g,'p']); });
+  if(!jobs.length) return;
+  if(jobs.some(([g])=>!g.text.trim())){ toast('보낼 내용이 비어 있어요'); return; }
+  const nS=jobs.filter(j=>j[1]==='s').length, nP=jobs.length-nS;
+  if(!confirm(`${[nS?`문자 ${nS}명`:'',nP?`푸시 ${nP}명`:''].filter(Boolean).join(' · ')}에게 보낼까요?${nS?'\n문자는 매장 폰으로 바로 나가요.':''}`)) return;
   const btn=$('#arrSend'); btn.disabled=true;
-  let ok=0, bad=0;
-  for(const g of list){
-    $('#arrMsg').textContent=`보내는 중… (${ok+bad+1}/${list.length})`; $('#arrMsg').className='status busy';
+  const url=ARR.info.relayUrl, heading=ARR.mode==='resend'?'📦 예약하신 악세가 도착해 있어요':'📦 예약하신 악세가 도착했어요';
+  let ok=0, bad=0, i=0;
+  try{ if(!RELAY_MODE) await relayProbe(url); }catch(e){ /* 아래에서 하나씩 실패로 표시 */ }
+  for(const [g,k] of jobs){
+    $('#arrMsg').textContent=`보내는 중… (${++i}/${jobs.length})`; $('#arrMsg').className='status busy';
+    const text=g.text;
     try{
-      const r=await relaySend(ARR.info.relayUrl,{sms:'test',to:g.phone,text:g.text});
-      g.fail='';
-      await arrAfterSent(g,r&&r.ready===false?'보냄 (매장 폰 연결 대기 중)':'보냈어요');
-      ok++;
-    }catch(e){ g.fail=(e.message||'못 보냈어요')+' · 아래 문자앱으로 보내주세요'; bad++; }
+      let r;
+      if(k==='s') r=await relaySend(url,{sms:'test',to:g.phone,text});
+      else { const body=pushTextFor(g); r=await relaySend(url,{pushTo:[g.cust.cardId],heading,content:body,url:pushUrlFor(g,heading,body)}); }
+      const how=r&&r.blind?'보냄 (결과 확인 안 됨)':(k==='s'&&r&&r.ready===false?'보냄 (매장 폰 연결 대기 중)':'보냈어요');
+      await arrAfterSent(g,k,how,text); ok++;
+    }catch(e){ g.fail[k]=(e.message||'못 보냈어요')+(k==='s'?' · 아래 문자앱으로 보내주세요':''); bad++; }
   }
-  // 문자 없이 고른 예약(번호 없음)도 도착으로
+  // 연락 없이 고른 예약(번호 없음)도 도착으로
   if(ARR.mode!=='resend') arrMarkArrived(ARR.groups.filter(g=>!g.phone).flatMap(g=>g.items));
   save(); renderResv(); btn.disabled=false;
-  if(!bad){ const md0=ARR.mode; $('#arrDlg').close(); toast(md0==='resend'?`다시 안내 문자를 보냈어요 (${ok}명)`:`도착 체크하고 문자 보냈어요 (${ok}명)`); return; }
-  $('#arrMsg').textContent=`${ok}명 보냄 · ${bad}명은 못 보냈어요. 아래 '문자앱으로'로 보내주세요.`; $('#arrMsg').className='status err';
+  const blind=RELAY_MODE==='blind';
+  if(!bad){ const md0=ARR.mode; $('#arrDlg').close(); toast(`${md0==='resend'?'다시 안내':'도착 체크하고'} 보냈어요 (${[nS?`문자 ${nS}`:'',nP?`푸시 ${nP}`:''].filter(Boolean).join(' · ')})${blind?' · 결과는 매장 폰에서 확인':''}`); return; }
+  $('#arrMsg').textContent=`${ok}건 보냄 · ${bad}건은 못 보냈어요. 문자는 아래 '문자앱으로'로 보내주세요.`; $('#arrMsg').className='status err';
   arrRender();
 };
 $('#arrDlg').addEventListener('close',()=>{ ARR=null; renderResv(); });
@@ -1424,7 +1501,7 @@ function fillSummaries(){
   else crmMsg(`${curStore().name}은(는) 아직 로그인 안 됨${wa||wd?` · 반영 대기 ${wa+wd}건 (넣기 ${wa} · 지우기 ${wd}) · 로그인하면 바로 반영돼요`:''}`);
   const k=getKey(); const sk=$('#sumKey'); sk.textContent=k?'키 있음 · …'+k.slice(-4):'키 없음'; sk.className=k?'':'bad';
   $('#sumRep').textContent=(S.blockTpl||S.totTpl)?'사진에서 배운 모양':(todayTitle());
-  { const sa=$('#sumArr'); if(sa){ sa.textContent=relayPw()?'바로 보내기 켜짐':'문자앱으로 보내기'; sa.className=''; } }
+  { const sa=$('#sumArr'); if(sa){ sa.textContent=relayPw()?(RELAY_MODE==='blind'?'보내기 켜짐 · 결과 확인 안 됨':'바로 보내기 켜짐'):'문자앱으로 보내기'; sa.className=''; } }
   syncStoreDel();
   try{ renderCloud(); }catch(e){}
 }
@@ -1456,24 +1533,41 @@ $('#setDlg').addEventListener('close',()=>{
   S.suffix=$('#suffix').value.replace(/\s+$/,''); S.amtStyle=$('#amtStyle').value; S.totStyle=$('#totStyle').value;
   S.smsStore=$('#smsStore').value.trim(); const ta=$('#tplArr').value.trim(), tr=$('#tplRem').value.trim();
   if(ta&&ta!==ARR_TPL) S.tplArr=ta; else delete S.tplArr; if(tr&&tr!==REM_TPL) S.tplRem=tr; else delete S.tplRem;
-  try{ const pw=$('#relayPwIn').value.trim(); pw?localStorage.setItem(RELAY_PW_KEY,pw):localStorage.removeItem(RELAY_PW_KEY); }catch(e){}
+  try{ const pw=$('#relayPwIn').value.trim(); if(pw!==relayPw()) RELAY_MODE=null; pw?localStorage.setItem(RELAY_PW_KEY,pw):localStorage.removeItem(RELAY_PW_KEY); }catch(e){}
   update();
   if(getKey()&&$('#status').classList.contains('err')) setStatus('키를 넣었어요. 이제 사진을 읽어보세요.');
 });
 $('#tplArrReset').onclick=()=>{ $('#tplArr').value=ARR_TPL; $('#tplRem').value=REM_TPL; toast('기본 문구로 바꿨어요 (닫으면 저장돼요)'); };
+async function relayInfoForTest(say){
+  try{ const pw=$('#relayPwIn').value.trim(); if(pw!==relayPw()) RELAY_MODE=null; pw?localStorage.setItem(RELAY_PW_KEY,pw):localStorage.removeItem(RELAY_PW_KEY); }catch(e){}
+  if(!window.KCRM||!crmEmail()){ say(`먼저 🔗 강CRM 연결에서 ${curStore().name} 로그인을 해주세요 (중계 서버 주소를 강CRM에서 가져와요)`,'err'); return null; }
+  if(!relayPw()){ say('비밀번호를 넣어주세요','err'); return null; }
+  const info=await KCRM.arrivalInfo(curStore().id,[]);
+  if(!info.relayUrl){ say('강CRM에 중계 서버 주소가 없어요 (강CRM 설정에서 먼저 연결해 주세요)','err'); return null; }
+  return info;
+}
 $('#relayTest').onclick=async()=>{
   const m=$('#relayMsg'), say=(t,c='')=>{ m.textContent=t; m.className='status '+c; };
-  try{ const pw=$('#relayPwIn').value.trim(); pw?localStorage.setItem(RELAY_PW_KEY,pw):localStorage.removeItem(RELAY_PW_KEY); }catch(e){}
-  if(!window.KCRM||!crmEmail()){ say(`먼저 🔗 강CRM 연결에서 ${curStore().name} 로그인을 해주세요 (중계 서버 주소를 강CRM에서 가져와요)`,'err'); return; }
-  if(!relayPw()){ say('비밀번호를 넣어주세요','err'); return; }
   say('확인하는 중…','busy');
   try{
-    const info=await KCRM.arrivalInfo(curStore().id,[]);
-    if(!info.relayUrl){ say('강CRM에 중계 서버 주소가 없어요 (강CRM 설정에서 먼저 연결해 주세요)','err'); return; }
-    const st=await relaySend(info.relayUrl,{sms:'status'});
-    say(st.ready===false?'⚠️ 중계 서버는 연결됐는데 매장 폰(SMSGate)이 꺼져 있거나 연결이 안 돼 있어요':'✅ 연결됐어요. 도착 문자가 매장 폰으로 바로 나가요', st.ready===false?'err':'');
+    const info=await relayInfoForTest(say); if(!info) return;
+    RELAY_MODE=null;
+    const p=await relayProbe(info.relayUrl);
+    if(p.mode==='cors') say(p.d.ready===false?'⚠️ 중계 서버는 연결됐는데 매장 폰(SMSGate)이 꺼져 있거나 연결이 안 돼 있어요':'✅ 연결됐어요. 문자·푸시가 바로 나가고 결과도 확인돼요', p.d.ready===false?'err':'');
+    else say('⚠️ 서버에는 닿는데 이 앱 주소로는 결과를 읽을 수 없어요. 보내기는 되지만 성공 여부는 확인이 안 돼요. 아래 시험 문자로 실제로 오는지 확인해 주세요. (완전히 고치려면 중계 서버 허용 주소에 kang-acc.github.io 추가)','err');
     fillSummaries();
   }catch(e){ say('❌ '+(e.message||'확인하지 못했어요'),'err'); }
+};
+$('#relayTestSend').onclick=async()=>{
+  const m=$('#relayMsg'), say=(t,c='')=>{ m.textContent=t; m.className='status '+c; };
+  const to=$('#relayTestTo').value.replace(/\D/g,'');
+  if(!okTel(to)){ say('시험 받을 휴대폰 번호를 넣어주세요','err'); return; }
+  say('보내는 중…','busy');
+  try{
+    const info=await relayInfoForTest(say); if(!info) return;
+    const r=await relaySend(info.relayUrl,{sms:'test',to,text:`악세정산 도착 문자 시험이에요 ✅\n${curStore().name}`});
+    say(r.blind?'보냈어요 (결과 확인 안 됨). 1~2분 안에 문자가 오면 정상이에요.':(r.ready===false?'⚠️ 접수됐는데 매장 폰 연결이 안 돼 있어서 아직 안 나가요':'✅ 보냈어요. 1~2분 안에 문자가 오는지 확인해 주세요'), r.ready===false?'err':'');
+  }catch(e){ say('❌ '+(e.message||'보내지 못했어요'),'err'); }
 };
 $('#tplReset').onclick=()=>{ delete S.blockTpl; delete S.totTpl; delete S.gap; $('#tplRow').hidden=true; save(); update(); fillSummaries(); toast('기본 모양으로 되돌렸어요'); };
 // 👑 매장 삭제는 총관리자만 (강CRM 총관리자와 같은 계정) — 이 폰의 어느 매장이든 🔗 강CRM 연결에 총관리자로 로그인돼 있어야 함
@@ -2062,7 +2156,7 @@ window.KCRM = {
       let c = null, cid = id;
       try { const s = await getDoc(doc(db, 'smart_customers', id)); c = s.exists() ? s.data() : null; } catch (e) { throw new Error(why(e)); }
       if (!c) { const m = await movedCustomer(db, id); if (m) { c = m.data; cid = m.id; } }
-      customers[raw] = c && !c.deletedAt ? { id: cid, name: c.name || '', cardId: c.cardId || '', manager: c.manager || '' } : null;
+      customers[raw] = c && !c.deletedAt ? { id: cid, name: c.name || '', cardId: c.cardId || '', manager: c.manager || '', push: c.pushSubscribed === true } : null;
     }
     return { me: meName(sl, st), email: sl.user.email, storeName: String(st.smsStoreName || '').trim(), relayUrl: String(st.pushRelayUrl || '').trim(), staffByEmail: st.staffByEmail || {}, team, customers };
   },
