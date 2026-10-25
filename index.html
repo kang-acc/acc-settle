@@ -102,7 +102,39 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .ghost:disabled{opacity:.45}
 .rdone{border-top:1px solid var(--line)}
 .rdone summary{padding:10px 12px;font-size:13px;color:var(--sub);cursor:pointer}
-.mini-btn{border:1px solid var(--line);background:none;border-radius:8px;padding:4px 8px;font-size:12px}
+.mini-btn{border:1px solid var(--line);background:none;border-radius:8px;padding:4px 8px;font-size:12px;color:var(--ink);text-decoration:none;display:inline-block}
+/* 📦 V11 단계 · 도착 문자 */
+.rstages{display:flex;gap:6px;overflow-x:auto;padding:10px 12px 2px;scrollbar-width:none}
+.rstages::-webkit-scrollbar{display:none}
+.rsc{flex:none;border:1px solid var(--line);background:var(--card);border-radius:16px;padding:4px 11px;font-size:12px;color:var(--sub);font-weight:600}
+.rsc.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.rv{flex-wrap:wrap}
+.rv.late .rb.st-a{background:var(--bad-soft);color:var(--bad)}
+.stepbar{flex:1;max-width:46%;display:flex;gap:3px;margin-right:auto;align-self:center}
+.stepbar i{flex:1;height:3px;border-radius:2px;background:var(--line)}
+.stepbar i.d{background:var(--acc)}
+.rvb{flex-basis:100%;display:flex;justify-content:flex-end;gap:6px}
+
+.sbtn{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font-size:13px;font-weight:700;color:var(--ink)}
+.sbtn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.rb.st-o{background:#E0E7FF;color:#3730A3}
+.rb.st-a{background:var(--warn-soft);color:var(--warn)}
+@media (prefers-color-scheme:dark){.rb.st-o{background:#24264A;color:#C7D2FE}}
+.apick{display:flex !important;align-items:flex-start;gap:8px;padding:7px 0;margin:0 !important;border-bottom:1px solid var(--line);color:var(--ink) !important;font-size:14px !important}
+.apick input{width:20px;height:20px;margin-top:1px;accent-color:var(--acc);flex:none}
+.apick small{display:block;font-size:12px;color:var(--sub)}
+.agrp{border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+.agrp.sent{border-color:var(--ok)}
+.agh{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.agh span{font-size:12px;color:var(--sub)}
+.agm{font-size:12px;color:var(--sub);margin:3px 0 6px}
+.agrp textarea{width:100%;font-size:14px;line-height:1.5;resize:vertical}
+.ags{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;font-size:12px}
+.ags .okt{color:var(--ok);font-weight:700}
+.ags .bad{color:var(--bad);font-weight:600}
+.ags .mini-btn{margin-left:auto}
+#arrHint div{font-size:12px;color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:6px 9px;margin-top:6px}
+.rstage{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg);border-radius:10px;padding:8px 10px;margin-top:10px;font-size:13px}
 
 /* 사진 모음 */
 .tray{margin-top:10px;padding:10px 12px}
@@ -227,6 +259,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
 
   <h2><span>예약 악세<span class="storetag" data-storename></span></span> <small id="resvCount"></small></h2>
   <div class="card resv">
+    <div class="rstages" id="resvStages" hidden></div>
     <div id="resvList"></div>
     <div class="resvsum" id="resvSum" hidden></div>
     <div class="rowbtns" style="padding:0 12px 12px">
@@ -321,6 +354,25 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
     </div>
   </details>
 
+  <details class="acc" id="accArr">
+    <summary><span>📨 도착 문자</span><small id="sumArr"></small></summary>
+    <div class="accb">
+      <label for="smsStore">문자에 쓸 매장 이름 (이 매장)</label>
+      <input id="smsStore" placeholder="비우면 강CRM 문자 매장 이름">
+      <label for="tplArr">도착 문구 (이 매장)</label>
+      <textarea id="tplArr" rows="6"></textarea>
+      <label for="tplRem">다시 안내 문구 (이 매장)</label>
+      <textarea id="tplRem" rows="6"></textarea>
+      <div class="hint">바꿔 쓰는 말: {이름} {매장} {품목} {담당자} {담당번호} · 담당자는 예약 받은 사람이고, 번호는 강CRM 직원 공용 명함에서 가져와요. 번호가 없으면 그 자리는 비워요. 명함 링크는 문구 뒤에 붙어요.</div>
+      <button type="button" class="ghost" id="tplArrReset" style="margin-top:6px;width:100%">기본 문구로 되돌리기</button>
+      <label for="relayPwIn">문자 중계 서버 비밀번호 (모든 매장 · 이 폰에만)</label>
+      <input id="relayPwIn" type="password" autocomplete="off" placeholder="강CRM 설정의 중계 서버 비밀번호">
+      <div class="hint">강CRM 설정 → 자동 알림 서버에 넣은 비밀번호와 같아요. 넣으면 매장 폰(SMSGate)으로 바로 보내지고, 없으면 문자앱으로 하나씩 보내요.</div>
+      <button type="button" class="ghost chk" id="relayTest" style="margin-top:6px;width:100%">🩺 연결 확인</button>
+      <div class="status" id="relayMsg" role="status" style="margin:8px 0 0"></div>
+    </div>
+  </details>
+
   <details class="acc" id="accCloud">
     <summary><span>☁️ 서버 저장 (모든 매장)</span><small id="sumCloud"></small></summary>
     <div class="accb">
@@ -347,7 +399,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V10.0</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V11.0</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -386,7 +438,19 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
       <div class="hint" id="rCrmInfo"></div>
     </div>
   </div>
+  <div class="rstage" id="rStage" hidden><span id="rStageTxt"></span><button type="button" class="mini-btn" id="rStageBack">한 단계 되돌리기</button></div>
   <div class="row"><button type="button" id="rDel" hidden style="flex:none;color:var(--bad)">삭제</button><button value="cancel" formnovalidate>취소</button><button value="ok" class="pri">저장</button></div>
+</form></dialog>
+
+<dialog id="arrDlg"><form method="dialog" class="sheet">
+  <h3 id="arrTitle">📦 도착 처리</h3>
+  <div id="arrHint"></div>
+  <div id="arrPick"></div>
+  <label class="crmchk" style="margin-top:12px"><input type="checkbox" id="arrCard"> 담당자 명함 링크 같이 보내기</label>
+  <div id="arrMsgs"></div>
+  <div class="status" id="arrMsg" role="status" style="margin:8px 0 0"></div>
+  <div class="row"><button type="button" id="arrOnly">도착만 체크</button><button type="button" class="pri" id="arrSend">도착 체크 + 문자 보내기</button></div>
+  <div class="row" style="margin-top:6px"><button value="cancel" formnovalidate>닫기</button></div>
 </form></dialog>
 
 <dialog id="itemDlg"><form method="dialog" class="sheet" id="itemForm">
@@ -929,45 +993,75 @@ $('#hist').addEventListener('click',async e=>{
     if(S.items.length&&!confirm('지금 목록에 있는 품목은 지워지고 그때 품목으로 돌아가요. 되돌릴까요?')) return;
     if(!S.items.length&&!confirm(`${h.title} 정산을 취소하고 잔액을 되돌릴까요?`)) return;
     h.deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); if(p) p.bal=(+p.bal||0)+d.amt; });
-    (h.resvDone||[]).forEach(id=>{ const r=(S.resv||[]).find(x=>x.id===id); if(r){ r.status='wait'; delete r.orderTitle; } });
+    (h.resvDone||[]).forEach(id=>{ const r=(S.resv||[]).find(x=>x.id===id); if(r&&r.status==='ordered'){ r.status='wait'; delete r.orderTitle; delete r.orderedAt; } });
     S.items=h.items||[]; S.title=h.title; S.history.shift(); delete S.resvSig; renderAll(); toast('되돌렸어요');
   }
 });
 
 /* ---------- 예약 악세 · 빠진 거 확인 ---------- */
 const itemsSig=()=>S.items.filter(it=>it.to!=='ex').map(it=>it.id+':'+it.qty+':'+it.name).join('|');
-const pending=()=>(S.resv||[]).filter(r=>r.status!=='ordered');
+const pending=()=>(S.resv||[]).filter(r=>!r.status||r.status==='wait');
 function whoName(id){ if(id==='shared') return '공용'; const p=S.people.find(x=>x.id===id); return p?(p.name||''):''; }
 function resvState(){
   const P=pending(); const stale=S.resvSig!==undefined&&S.resvSig!==itemsSig();
   const checked=P.filter(r=>r.chk);
   return {P,stale,miss:checked.filter(r=>r.chk.s==='missing'),unsure:checked.filter(r=>r.chk.s==='unsure'),ok:checked.filter(r=>r.chk.s==='ok'),unchecked:P.filter(r=>!r.chk)};
 }
+const STAGES={wait:'예약',ordered:'주문완료',arrived:'도착',picked:'찾아감'};
+const stOf=r=>STAGES[r.status]?r.status:'wait';
+const md=t=>{ const d=new Date(t); return isNaN(d)?'':`${d.getMonth()+1}/${d.getDate()}`; };
+const hm=t=>{ const d=new Date(t); return isNaN(d)?'':`${md(t)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+const daysSince=t=>{ const a=new Date(t), b=new Date(); a.setHours(0,0,0,0); b.setHours(0,0,0,0); return Math.round((b-a)/86400000); };
+const okTel=p=>/^01\d{8,9}$/.test(String(p||''));
 function renderResv(){
   S.resv=S.resv||[];
-  const st=resvState(); const done=S.resv.filter(r=>r.status==='ordered');
-  $('#resvCount').textContent=st.P.length?`대기 ${st.P.length}개`:'';
+  const st=resvState();
+  const act=S.resv.filter(r=>stOf(r)!=='picked'), picked=S.resv.filter(r=>stOf(r)==='picked');
+  const cnt={wait:0,ordered:0,arrived:0}; act.forEach(r=>cnt[stOf(r)]++);
+  if(!['all','wait','ordered','arrived'].includes(S.resvF)) S.resvF='all';
+  if(S.resvF!=='all'&&!cnt[S.resvF]) S.resvF='all';
+  $('#resvCount').textContent=act.length?`진행 ${act.length}개`:'';
+  const chip=(k,l,n)=>`<button type="button" class="rsc${S.resvF===k?' on':''}" data-rf="${k}" aria-pressed="${S.resvF===k}">${l} ${n}</button>`;
+  $('#resvStages').innerHTML=act.length?chip('all','전체',act.length)+(cnt.wait?chip('wait','예약',cnt.wait):'')+(cnt.ordered?chip('ordered','주문완료',cnt.ordered):'')+(cnt.arrived?chip('arrived','도착',cnt.arrived):''):'';
+  $('#resvStages').hidden=!act.length;
   const badge=r=>{
+    const s=stOf(r);
+    if(s==='ordered') return `<span class="rb st-o">주문완료${r.orderedAt?' '+md(r.orderedAt):''}</span>`;
+    if(s==='arrived'){ const n=daysSince(r.arrivedAt||Date.now()); return `<span class="rb st-a">도착 · ${n<=0?'오늘':n+'일째'}</span>`; }
     if(!r.chk) return S.items.length?'<span class="rb">확인 전</span>':'';
-    const m={ok:['ok','✅ 주문에 있음'],missing:['miss','❌ 빠짐'],unsure:['uns','⚠️ 확인 필요']}[r.chk.s]||['','']; 
+    const m={ok:['ok','✅ 주문에 있음'],missing:['miss','❌ 빠짐'],unsure:['uns','⚠️ 확인 필요']}[r.chk.s]||['',''];
     return `<span class="rb ${m[0]}">${m[1]}</span>`;
   };
+  const bar=r=>{ const i=['wait','ordered','arrived','picked'].indexOf(stOf(r)); return `<div class="stepbar" aria-hidden="true">${[0,1,2,3].map(k=>`<i class="${k<=i?'d':''}"></i>`).join('')}</div>`; };
+  const acts=r=>{
+    const s=stOf(r);
+    if(s==='wait') return `<button type="button" class="sbtn" data-ract="order">✓ 주문완료</button>`;
+    if(s==='ordered') return `<button type="button" class="sbtn" data-ract="unorder" aria-label="예약으로 되돌리기">↩</button><button type="button" class="sbtn pri" data-ract="arrive">📦 도착 · 문자</button>`;
+    if(s==='arrived') return `<button type="button" class="sbtn" data-ract="resend">💬 다시 문자</button><button type="button" class="sbtn pri" data-ract="pick">🛍️ 찾아감</button>`;
+    return '';
+  };
   const row=r=>{
-    const it=r.chk&&r.chk.item?S.items.find(x=>x.id===r.chk.item):null;
-    // 🔗 강CRM과 연결된 예약이면 가운데에 손님 이름 · 예약 잡은 담당자
+    const s=stOf(r);
+    const it=s==='wait'&&r.chk&&r.chk.item?S.items.find(x=>x.id===r.chk.item):null;
     const linked=!!(r.crm||r.crmPending||r.src==='crm');
     const staff=whoName(r.who)||r.byName||'';
-    const mid=linked&&(r.cname||staff)?`<div class="rvc" data-redit>${r.cname?`<b>${esc(r.cname)}</b>`:''}${staff?`<span>담당 ${esc(staff)}</span>`:''}</div>`:'';
-    const sub=[r.qty>1?`${r.qty}개`:'',mid?'':whoName(r.who),r.memo,new Date(r.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 예약'].filter(Boolean).join(' · ');
-    return `<div class="rv${r.chk&&r.chk.s==='missing'?' miss':''}" data-rid="${r.id}">
+    const mid=(linked||s!=='wait')&&(r.cname||staff)?`<div class="rvc" data-redit>${r.cname?`<b>${esc(r.cname)}</b>`:''}${staff?`<span>담당 ${esc(staff)}</span>`:''}</div>`:'';
+    const when=s==='arrived'?(r.smsAt?`문자 보냄 ${hm(r.smsAt)}${r.smsN>1?` (${r.smsN}번)`:''}`:'문자 안 보냄'):(s==='ordered'?(r.orderTitle&&r.orderTitle!=='직접 체크'?r.orderTitle+'에 주문':''):'');
+    const sub=[r.qty>1?`${r.qty}개`:'',mid?'':whoName(r.who),r.memo,s==='wait'?new Date(r.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 예약':when].filter(Boolean).join(' · ');
+    const crmB=s==='wait'?(r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">${r.src==='crm'?'📥 CRM에서 ':'📅 CRM '}${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')):'';
+    return `<div class="rv${s==='wait'&&r.chk&&r.chk.s==='missing'?' miss':''}${s==='arrived'&&daysSince(r.arrivedAt||Date.now())>=3?' late':''}" data-rid="${r.id}">
       <div class="rvt" data-redit><b>${esc(r.text)}</b><span>${esc(sub)}</span>
-      ${r.chk&&(it||r.chk.note)?`<span class="rvm">${it?'→ '+esc(it.name):''}${r.chk.note?(it?' · ':'')+esc(r.chk.note):''}</span>`:''}</div>${mid}
-      <div class="rva">${r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">${r.src==='crm'?'📥 CRM에서 ':'📅 CRM '}${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')}${badge(r)}</div></div>`;
+      ${it||(s==='wait'&&r.chk&&r.chk.note)?`<span class="rvm">${it?'→ '+esc(it.name):''}${r.chk.note?(it?' · ':'')+esc(r.chk.note):''}</span>`:''}</div>${mid}
+      <div class="rva">${crmB}${badge(r)}</div>
+      <div class="rvb">${bar(r)}${acts(r)}</div></div>`;
   };
-  $('#resvList').innerHTML=st.P.length?st.P.map(row).join(''):'<div class="empty">손님이 예약한 악세를 적어두면, 주문표를 읽은 뒤 빠진 게 있는지 확인해 줘요.</div>';
-  $('#resvDone').hidden=!done.length;
-  $('#resvDoneSum').textContent=`주문 완료 ${done.length}개`;
-  $('#resvDoneList').innerHTML=done.slice(0,40).map(r=>`<div class="rv done" data-rid="${r.id}"><div class="rvt"><b>${esc(r.text)}</b><span>${esc([r.qty>1?r.qty+'개':'',whoName(r.who),r.memo,r.orderTitle?r.orderTitle+'에 주문':''].filter(Boolean).join(' · '))}</span></div><div class="rva"><button class="mini-btn" data-rback>대기로</button><button class="x" data-rdel aria-label="삭제">×</button></div></div>`).join('');
+  const list=act.filter(r=>S.resvF==='all'||stOf(r)===S.resvF);
+  $('#resvList').innerHTML=list.length?list.map(row).join(''):'<div class="empty">손님이 예약한 악세를 적어두면, 주문표를 읽은 뒤 빠진 게 있는지 확인하고 도착하면 문자까지 보내요.</div>';
+  $('#resvDone').hidden=!picked.length;
+  $('#resvDoneSum').textContent=`🛍️ 찾아감 ${picked.length}개`;
+  picked.sort((a,b)=>(b.pickedAt||0)-(a.pickedAt||0));
+  const crmTag=r=>r.crmPickPending?'<span class="rb crmx" data-pickretry>CRM 반영 대기</span>':(r.crmPicked&&r.crmPicked!=='none'?'<span class="rb crm">CRM 반영됨</span>':'');
+  $('#resvDoneList').innerHTML=picked.slice(0,40).map(r=>`<div class="rv done" data-rid="${r.id}"><div class="rvt"><b>${esc(r.text)}</b><span>${esc([r.cname,r.qty>1?r.qty+'개':'',r.pickedAt?md(r.pickedAt)+' 찾아감':'',r.pickedVia==='crm'?'강CRM에서 체크':''].filter(Boolean).join(' · '))}</span></div><div class="rva">${crmTag(r)}<button class="mini-btn" data-rback>되돌리기</button><button class="x" data-rdel aria-label="삭제">×</button></div></div>`).join('');
   const cb=$('#resvCheck'); cb.disabled=!st.P.length||!S.items.length;
   cb.textContent=st.stale&&st.P.some(r=>r.chk)?'🔄 다시 확인':'✅ 빠진 거 확인';
   const sum=$('#resvSum');
@@ -1038,14 +1132,33 @@ function openResv(id){
   $('#rCrm').checked=id?!!(r.crm||r.crmPending):(localStorage.getItem('acc-crm-on')!=='0');
   syncCrmBox();
   $('#rWho').innerHTML=`<option value="">선택 안 함</option>${S.people.filter(p=>p.name).map(p=>`<option value="${p.id}"${r.who===p.id?' selected':''}>${esc(p.name)}</option>`).join('')}<option value="shared"${r.who==='shared'?' selected':''}>공용</option>`;
-  $('#rDel').hidden=!id; $('#resvDlg').showModal(); setTimeout(()=>$('#rText').focus(),50);
+  $('#rDel').hidden=!id;
+  const s0=id?stOf(r):'wait'; $('#rStage').hidden=s0==='wait';
+  $('#rStageTxt').textContent=`지금 단계: ${STAGES[s0]}${s0==='arrived'&&r.arrivedAt?' · '+md(r.arrivedAt)+' 도착':''}${s0==='picked'&&r.pickedAt?' · '+md(r.pickedAt):''}`;
+  $('#resvDlg').showModal(); setTimeout(()=>$('#rText').focus(),50);
 }
 $('#resvAdd').onclick=()=>openResv(null);
 $('#resvCheck').onclick=()=>runResvCheck(false);
-$('#resvList').addEventListener('click',e=>{ if(e.target.closest('[data-crmretry]')){ syncCrm(false); return; } const r=e.target.closest('[data-rid]'); if(r) openResv(r.dataset.rid); });
+$('#resvList').addEventListener('click',e=>{
+  if(e.target.closest('[data-crmretry]')){ syncCrm(false); return; }
+  const row=e.target.closest('[data-rid]'); if(!row) return;
+  const b=e.target.closest('[data-ract]');
+  if(!b){ openResv(row.dataset.rid); return; }
+  const r=S.resv.find(x=>x.id===row.dataset.rid); if(!r) return;
+  const a=b.dataset.ract;
+  if(a==='order'){ r.status='ordered'; r.orderedAt=Date.now(); r.orderTitle='직접 체크'; delete r.chk; save(); renderResv(); update(); toast('주문완료로 체크했어요'); }
+  else if(a==='unorder'){ r.status='wait'; delete r.orderedAt; delete r.orderTitle; save(); renderResv(); update(); toast('예약으로 되돌렸어요'); }
+  else if(a==='arrive') openArrival(r.id,'arrive');
+  else if(a==='resend') openArrival(r.id,'resend');
+  else if(a==='pick') doPickup(r);
+});
 $('#resvDoneList').addEventListener('click',e=>{
   const row=e.target.closest('[data-rid]'); if(!row) return; const r=S.resv.find(x=>x.id===row.dataset.rid);
-  if(e.target.closest('[data-rback]')){ r.status='wait'; delete r.chk; delete r.orderTitle; save(); renderResv(); toast('대기로 돌렸어요'); }
+  if(e.target.closest('[data-pickretry]')){ syncPickups(false); return; }
+  if(e.target.closest('[data-rback]')){
+    if(r.crmPicked&&r.crmPicked!=='none'&&r.crmPicked!=='logged'&&!confirm('강CRM에는 이미 찾아감으로 체크돼 있어요.\n여기서만 도착으로 되돌릴까요? (강CRM 체크는 강CRM에서 풀어주세요)')) return;
+    r.status=r.arrivedAt?'arrived':'ordered'; delete r.pickedAt; delete r.crmPickPending; delete r.pickedVia; save(); renderResv(); toast(r.status==='arrived'?'도착으로 되돌렸어요':'주문완료로 되돌렸어요');
+  }
   else if(e.target.closest('[data-rdel]')){ if(!confirm(r&&r.crm?'이 예약을 목록에서 지울까요?\n강CRM의 악세 예약(찾으러 오는 날 알림)도 같이 지워요.':'이 예약을 목록에서 지울까요?')) return; queueCrmDel(r); S.resv=S.resv.filter(x=>x!==r); save(); renderResv(); if(pendingCrmDel().length) syncCrm(true); }
 });
 $('#rDel').onclick=()=>{
@@ -1076,7 +1189,230 @@ $('#resvDlg').addEventListener('close',()=>{
   if(pendingCrm().length||pendingCrmDel().length) syncCrm(!(wantCrm&&okPhone&&!crmEmail()));   // 이 매장 첫 등록이면 로그인 창
 });
 $('#rCrm').addEventListener('change',syncCrmBox);
+$('#rStageBack').onclick=()=>{
+  const r=S.resv.find(x=>x.id===editingR); if(!r) return;
+  const s=stOf(r);
+  if(s==='picked'){ if(r.crmPicked&&r.crmPicked!=='none'&&r.crmPicked!=='logged'&&!confirm('강CRM에는 이미 찾아감으로 체크돼 있어요.\n여기서만 되돌릴까요? (강CRM 체크는 강CRM에서 풀어주세요)')) return; r.status=r.arrivedAt?'arrived':'ordered'; delete r.pickedAt; delete r.crmPickPending; delete r.pickedVia; }
+  else if(s==='arrived'){ r.status='ordered'; delete r.arrivedAt; }
+  else if(s==='ordered'){ r.status='wait'; delete r.orderedAt; delete r.orderTitle; }
+  save(); renderResv(); update();
+  const n=stOf(r); $('#rStage').hidden=n==='wait'; $('#rStageTxt').textContent=`지금 단계: ${STAGES[n]}`; toast(`${STAGES[n]}(으)로 되돌렸어요`);
+};
 $('#rPhone').addEventListener('input',e=>{ const d=e.target.value.replace(/\D/g,'').slice(0,11); if(d.length>=10) e.target.value=fmtTel(d); });
+
+/* ---------- 📦 V11 주문완료 · 도착 문자 · 찾아감 ----------
+   · 예약 → ✓ 주문완료 (주문 확정 때 ✅인 예약은 자동) → 📦 도착 · 문자 (미리보기 후 발송) → 🛍️ 찾아감 (강CRM 악세 예약 체크)
+   · 문자는 강CRM과 같은 중계 서버 → 매장 폰(SMSGate)으로 · 보낸 문자는 강CRM 고객 카드 '보낸 문자'와 연락 기록에 남아요
+   · 문구에는 예약 받은 담당자 이름·번호(직원 공용 명함)와 명함 링크만 · 번호를 모르면 비워요 (매장 번호는 안 넣음) */
+const ARR_TPL='{이름}님, {매장}입니다 😊\n예약하신 {품목} 도착했어요.\n편하실 때 들러서 찾아가세요!\n\n담당 {담당자} {담당번호}';
+const REM_TPL='{이름}님, {매장}입니다 😊\n예약하신 {품목} 매장에 도착해 있어요.\n편하실 때 찾아가세요!\n\n담당 {담당자} {담당번호}';
+const MAIN_CARD='https://kanggun1983.github.io/', TEAM_CARD=MAIN_CARD+'team/';
+const RELAY_PW_KEY='acc-relay-pw';
+const relayPw=()=>{ try{ return localStorage.getItem(RELAY_PW_KEY)||''; }catch(e){ return ''; } };
+const cardOn=()=>{ try{ return localStorage.getItem('acc-arr-card')!=='0'; }catch(e){ return true; } };
+const TITLE_RE=/\s*(과장|대리|사원|주임|팀장|점장|실장|부장|차장|매니저|선임|책임|대표|님)$/;
+function mKey(n){ let v=String(n||'').trim().replace(/\s+/g,' '),p; do{ p=v; v=v.replace(TITLE_RE,'').trim(); }while(v!==p); return v; }
+function sameStaffN(a,b){ a=mKey(a).replace(/\s+/g,''); b=mKey(b).replace(/\s+/g,''); if(!a||!b) return false; return a===b||(a.length>=2&&b.length>=2&&(a.endsWith(b)||b.endsWith(a))); }
+const NONAME_RE=/^(고객|손님|이름|성함|미정|없음|무명|미입력|미기재|미확인|모름|미상|익명|본인|고객님|님)$/;
+const msgNameA=n=>{ const t=String(n||'').replace(/[\s.\-_~!?·,()\[\]"'*/]/g,''); return !t||/^\d+$/.test(t)||NONAME_RE.test(t)?'VIP고객':String(n).trim(); };
+// 예약 받은 담당자 → 이름(직함)·번호·명함 링크 (강CRM '자동 문자 명함'과 같은 규칙: 👑 대표·담당 없음 = 대표 명함 / 직원 = 공용 명함)
+function staffCard(name,info){
+  const team=info&&info.team, tStaff=Object.entries((team&&team.staff)||{});
+  const hit=name?(tStaff.find(([,p])=>mKey(p.key||p.name)===mKey(name))||tStaff.find(([,p])=>sameStaffN(p.key||p.name,name))):null;
+  const p=hit?hit[1]:null, sid=hit?hit[0]:'';
+  const boss=!name||ACC_ADMINS.some(e=>{ const n=info&&info.staffByEmail&&info.staffByEmail[e]; return n&&sameStaffN(n,name); });
+  const title=p&&p.title?String(p.title).trim():'';
+  const nm=name?String(p&&p.name||name).trim():'';
+  const label=nm?(title&&!nm.endsWith(title)?`${nm} ${title}`:nm):'';
+  const phone=p&&p.active!==false&&p.phone?fmtTel(p.phone):'';
+  const team_=!boss&&team&&team.on===true&&sid;
+  return {label,phone,base:team_?TEAM_CARD:MAIN_CARD,qs:team_?'s='+sid:''};
+}
+const cardUrl=(sc,cardId)=>cardId?`${sc.base}?c=${encodeURIComponent(cardId)}${sc.qs?'&'+sc.qs:''}`:sc.base+(sc.qs?'?'+sc.qs:'');
+function fillArr(tpl,g){
+  let t=String(tpl||'');
+  if(!g.sc.phone) t=t.replace(/[ \t]*\{담당번호\}/g,'');
+  if(!g.sc.label) t=t.replace(/^[^\n]*\{담당자\}[^\n]*\n?/m,'');
+  const items=g.items.map(r=>`${r.text}${r.qty>1?' '+r.qty+'개':''}`).join(', ');
+  t=t.replace(/\{이름\}/g,msgNameA(g.name)).replace(/\{매장\}/g,g.store).replace(/\{품목\}/g,items).replace(/\{담당자\}/g,g.sc.label).replace(/\{담당번호\}/g,g.sc.phone);
+  t=t.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  if(cardOn()&&g.link) t+=`\n\n📇 ${g.sc.label||g.store} 명함\n${g.link}`;
+  return t;
+}
+async function relaySend(url,body){
+  let res;
+  try{ res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,password:relayPw()})}); }
+  catch(e){ throw new Error('중계 서버에 연결하지 못했어요 (인터넷 또는 서버 설정)'); }
+  let d=null; try{ d=await res.json(); }catch(e){ d=null; }
+  if(!res.ok||!d||!d.ok) throw new Error((d&&d.error)||`중계 서버 응답 오류 (${res.status})`);
+  return d;
+}
+const smsHrefA=(to,text)=>`sms:${to}${/iPhone|iPad|iPod/.test(navigator.userAgent)?'&':'?'}body=${encodeURIComponent(text)}`;
+const smsStoreName=info=>String(S.smsStore||'').trim()||(info&&info.storeName)||curStore().name;
+
+// 📦 도착 창
+let ARR=null;   // {mode, sid, ids:Set, info, groups:[], loading}
+function arrPool(){ return ARR.mode==='resend'?S.resv.filter(r=>ARR.ids.has(r.id)):S.resv.filter(r=>stOf(r)==='ordered'||ARR.ids.has(r.id)); }
+async function openArrival(rid,mode){
+  ARR={mode,sid:curStore().id,ids:new Set([rid]),info:null,groups:[],edited:{},loading:false,err:''};
+  $('#arrTitle').textContent=mode==='resend'?'💬 다시 안내 문자':'📦 도착 처리';
+  $('#arrCard').checked=cardOn();
+  $('#arrMsg').textContent=''; $('#arrMsg').className='status';
+  $('#arrDlg').showModal();
+  await arrLoad();
+}
+async function arrLoad(){
+  const phones=[...new Set(arrPool().map(r=>r.phone).filter(okTel))];
+  ARR.info=null; ARR.err='';
+  if(window.KCRM&&crmEmail(ARR.sid)&&phones.length){
+    ARR.loading=true; arrRender();
+    try{
+      ARR.info=await KCRM.arrivalInfo(ARR.sid,phones);
+      // 명함번호가 없는 손님은 지금 만들어 둠 (문자앱은 누르는 순간 바로 열려야 해서 · 강CRM '명함 보내기'와 같음)
+      if(cardOn()) await Promise.all(Object.entries(ARR.info.customers||{}).filter(([,c])=>c&&!c.cardId).map(async([k,c])=>{ try{ c.cardId=await KCRM.ensureCard(ARR.sid,c.id,c.name)||''; }catch(e){} }));
+    }catch(e){ ARR.err=e.message||String(e); }
+    ARR.loading=false;
+  }
+  arrRender();
+}
+function arrGroups(){
+  const info=ARR.info, store=smsStoreName(info), by=new Map();
+  arrPool().filter(r=>ARR.ids.has(r.id)).forEach(r=>{ const k=okTel(r.phone)?r.phone:'none:'+r.id; if(!by.has(k)) by.set(k,[]); by.get(k).push(r); });
+  return [...by.entries()].map(([k,items])=>{
+    const phone=k.startsWith('none:')?'':k, cust=phone&&info&&info.customers?info.customers[phone]:null;
+    const name=items.map(r=>r.cname).find(Boolean)||(cust&&cust.name)||'';
+    const staffName=items.map(r=>r.byName||whoName(r.who)).find(Boolean)||(cust&&cust.manager)||'';
+    const sc=staffCard(staffName,info);
+    const link=info?cardUrl(sc,cust&&cust.cardId):'';
+    const g={key:k,phone,cust,name,items,store,sc,link,staffName};
+    g.text=ARR.edited[k]!==undefined?ARR.edited[k]:fillArr(ARR.mode==='resend'?(S.tplRem||REM_TPL):(S.tplArr||ARR_TPL),g);
+    const old=(ARR.groups||[]).find(x=>x.key===k); if(old){ g.sent=old.sent; g.fail=old.fail; }
+    return g;
+  });
+}
+function arrRender(){
+  if(!ARR) return;
+  const pool=arrPool(), info=ARR.info, relayOk=!!(info&&info.relayUrl&&relayPw());
+  const hint=[];
+  if(ARR.loading) hint.push('강CRM에서 담당자·명함 정보를 불러오는 중…');
+  else if(!window.KCRM||!crmEmail(ARR.sid)) hint.push(`🔗 ${curStore().name} 강CRM 로그인이 안 돼 있어서 담당자 번호·명함 링크 없이 보내고, 고객 카드에 기록이 안 남아요.`);
+  else if(ARR.err) hint.push('강CRM 정보를 못 불러왔어요: '+ARR.err);
+  if(!ARR.loading&&info&&!relayOk) hint.push(info.relayUrl?'⚙ → 📨 도착 문자에 중계 서버 비밀번호를 넣으면 버튼 한 번에 매장 폰으로 보내져요. 지금은 문자앱으로 하나씩 보내요.':'강CRM에 중계 서버 주소가 없어서 문자앱으로 하나씩 보내요.');
+  if(!ARR.loading&&!info&&!(window.KCRM&&crmEmail(ARR.sid))) hint.push('지금은 문자앱으로 하나씩 보내요.');
+  $('#arrHint').innerHTML=hint.map(h=>`<div>${esc(h)}</div>`).join('');
+  // 고르기 (도착 처리일 때만 · 주문완료 예약 모두)
+  $('#arrPick').hidden=ARR.mode==='resend'||pool.length<2;
+  $('#arrPick').innerHTML=ARR.mode==='resend'?'':`<div class="hint" style="margin:10px 0 4px">같이 도착한 것도 고르세요</div>`+pool.map(r=>`<label class="apick"><input type="checkbox" data-aid="${r.id}"${ARR.ids.has(r.id)?' checked':''}> <span><b>${esc(r.text)}</b>${r.qty>1?` ${r.qty}개`:''}<small>${esc([r.cname,okTel(r.phone)?fmtTel(r.phone):'번호 없음'].filter(Boolean).join(' · '))}</small></span></label>`).join('');
+  ARR.groups=arrGroups();
+  const G2=ARR.groups;
+  $('#arrMsgs').innerHTML=G2.length?G2.map(g=>`<div class="agrp${g.sent?' sent':''}" data-g="${esc(g.key)}">
+    <div class="agh"><b>${esc(g.name?msgNameA(g.name)+'님':'이름 없음')}</b><span>${g.phone?esc(fmtTel(g.phone)):'번호 없음 · 문자 없이 도착만 체크'}</span></div>
+    ${g.phone?`<div class="agm">${esc([g.sc.label?'담당 '+g.sc.label+(g.sc.phone?' '+g.sc.phone:' (번호 없음)'):'담당자 없음',info&&!g.cust?'강CRM에 없는 번호':''].filter(Boolean).join(' · '))}</div>
+    <textarea data-gt="${esc(g.key)}" rows="${Math.min(12,g.text.split('\n').length+1)}"${g.sent?' readonly':''}>${esc(g.text)}</textarea>
+    <div class="ags">${g.sent?`<span class="okt">✅ ${esc(g.sent)}</span>`:(g.fail?`<span class="bad">⚠️ ${esc(g.fail)}</span>`:'')}${!g.sent?`<a class="mini-btn" href="${smsHrefA(g.phone,g.text)}" data-gsms="${esc(g.key)}">💬 문자앱으로</a>`:''}</div>`:''}
+  </div>`).join(''):'<div class="empty">도착한 예약을 골라주세요.</div>';
+  document.querySelectorAll('#arrMsgs textarea').forEach(fitTa);
+  const nPhone=G2.filter(g=>g.phone&&!g.sent).length;
+  const sendB=$('#arrSend'), onlyB=$('#arrOnly');
+  onlyB.hidden=ARR.mode==='resend';
+  sendB.hidden=!nPhone||!relayOk;
+  sendB.textContent=ARR.mode==='resend'?`문자 보내기 (${nPhone}명)`:`도착 체크 + 문자 보내기 (${nPhone}명)`;
+  sendB.disabled=ARR.loading;
+  onlyB.textContent=nPhone&&!relayOk?'도착 체크 (문자는 위에서 문자앱으로)':'도착만 체크';
+}
+function fitTa(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight+4,420)+'px'; }
+function arrMarkArrived(items){
+  const now=Date.now();
+  items.forEach(r=>{ if(stOf(r)!=='arrived'&&stOf(r)!=='picked'){ r.status='arrived'; r.arrivedAt=now; } });
+}
+async function arrAfterSent(g,how){
+  const now=Date.now();
+  if(ARR.mode!=='resend') arrMarkArrived(g.items);
+  g.items.forEach(r=>{ r.smsAt=now; r.smsN=(r.smsN||0)+1; });
+  g.sent=how;
+  save(); renderResv();
+  if(g.cust&&window.KCRM&&crmEmail(ARR.sid)){
+    try{ await KCRM.logContact(ARR.sid,g.cust.id,{by:ARR.info&&ARR.info.me,label:'악세',action:ARR.mode==='resend'?'💬 문자발송 · 악세 다시 안내':'💬 문자발송 · 악세 도착',sms:g.text}); }
+    catch(e){ console.warn('강CRM 기록 실패',e); g.sent+=' (강CRM 기록은 못 남김)'; }
+  }
+}
+$('#arrPick').addEventListener('change',e=>{ const b=e.target.closest('[data-aid]'); if(!b) return; b.checked?ARR.ids.add(b.dataset.aid):ARR.ids.delete(b.dataset.aid); const need=[...ARR.ids].map(id=>S.resv.find(r=>r.id===id)).filter(r=>r&&okTel(r.phone)&&!(ARR.info&&ARR.info.customers&&r.phone in ARR.info.customers)); if(need.length&&crmEmail(ARR.sid)) arrLoad(); else arrRender(); });
+$('#arrMsgs').addEventListener('input',e=>{ const t=e.target.closest('[data-gt]'); if(!t) return; fitTa(t); ARR.edited[t.dataset.gt]=t.value; const g=ARR.groups.find(x=>x.key===t.dataset.gt); if(g){ g.text=t.value; const a=t.closest('.agrp').querySelector('[data-gsms]'); if(a) a.href=smsHrefA(g.phone,g.text); } });
+$('#arrMsgs').addEventListener('click',e=>{
+  const a=e.target.closest('[data-gsms]'); if(!a) return;
+  const g=ARR.groups.find(x=>x.key===a.dataset.gsms); if(!g) return;
+  a.href=smsHrefA(g.phone,g.text);   // 문자앱이 바로 열려요 (문자앱에서 [보내기]를 눌러주세요) → 보낸 것으로 기록
+  const mode=ARR.mode;
+  setTimeout(()=>{ if(ARR&&ARR.groups.includes(g)) arrAfterSent(g,mode==='resend'?'문자앱으로 다시 안내':'문자앱으로 보냄').then(()=>{ if(ARR) arrRender(); }); },300);
+});
+$('#arrCard').addEventListener('change',e=>{ try{ localStorage.setItem('acc-arr-card',e.target.checked?'1':'0'); }catch(err){} ARR.edited={}; arrRender(); });
+$('#arrOnly').onclick=()=>{
+  const items=arrPool().filter(r=>ARR.ids.has(r.id));
+  if(!items.length){ toast('도착한 예약을 골라주세요'); return; }
+  const unsent=ARR.groups.filter(g=>g.phone&&!g.sent);
+  arrMarkArrived(items); save();
+  $('#arrDlg').close();
+  toast(unsent.length?`도착 체크했어요 · 문자는 안 보냈어요 (${unsent.length}명)`:`도착 체크했어요 (${items.length}개)`);
+};
+$('#arrSend').onclick=async()=>{
+  const list=ARR.groups.filter(g=>g.phone&&!g.sent);
+  if(!list.length) return;
+  const empty=list.find(g=>!g.text.trim()); if(empty){ toast('문자 내용이 비어 있어요'); return; }
+  if(!confirm(`${list.length}명에게 문자를 보낼까요?\n매장 폰으로 바로 나가요.`)) return;
+  const btn=$('#arrSend'); btn.disabled=true;
+  let ok=0, bad=0;
+  for(const g of list){
+    $('#arrMsg').textContent=`보내는 중… (${ok+bad+1}/${list.length})`; $('#arrMsg').className='status busy';
+    try{
+      const r=await relaySend(ARR.info.relayUrl,{sms:'test',to:g.phone,text:g.text});
+      g.fail='';
+      await arrAfterSent(g,r&&r.ready===false?'보냄 (매장 폰 연결 대기 중)':'보냈어요');
+      ok++;
+    }catch(e){ g.fail=(e.message||'못 보냈어요')+' · 아래 문자앱으로 보내주세요'; bad++; }
+  }
+  // 문자 없이 고른 예약(번호 없음)도 도착으로
+  if(ARR.mode!=='resend') arrMarkArrived(ARR.groups.filter(g=>!g.phone).flatMap(g=>g.items));
+  save(); renderResv(); btn.disabled=false;
+  if(!bad){ const md0=ARR.mode; $('#arrDlg').close(); toast(md0==='resend'?`다시 안내 문자를 보냈어요 (${ok}명)`:`도착 체크하고 문자 보냈어요 (${ok}명)`); return; }
+  $('#arrMsg').textContent=`${ok}명 보냄 · ${bad}명은 못 보냈어요. 아래 '문자앱으로'로 보내주세요.`; $('#arrMsg').className='status err';
+  arrRender();
+};
+$('#arrDlg').addEventListener('close',()=>{ ARR=null; renderResv(); });
+
+// 🛍️ 찾아감 → 강CRM 악세 예약 체크 + 연락 기록
+const pendingPick=()=>G.stores.flatMap(st=>(st.data.resv||[]).filter(r=>r.crmPickPending).map(r=>({r,st})));
+let pickSyncing=false;
+async function syncPickups(auto){
+  if(pickSyncing||!window.KCRM) return; const list=pendingPick(); if(!list.length) return;
+  pickSyncing=true; let ok=0, part=0, nm=0, wait=0, fail='';
+  try{
+    for(const {r,st} of list){
+      if(!crmEmail(st.id)){ wait++; continue; }
+      try{
+        const left=(st.data.resv||[]).filter(x=>x!==r&&x.phone===r.phone&&stOf(x)!=='picked'&&(x.crm||x.src==='crm')).map(x=>(x.crm&&x.crm.date)||x.pickup).filter(Boolean).sort();
+        const res=await KCRM.pickupAcc(st.id,{phone:r.phone,line:(r.crm&&r.crm.line)||crmLine(r),text:r.text,nextDate:left[0]||''});
+        r.crmPicked=res; delete r.crmPickPending;
+        if(res==='checked'||res==='already') ok++; else if(res==='part') part++; else if(res==='nomatch') nm++;
+      }catch(e){ fail=e.message||String(e); }
+    }
+    save(); renderResv();
+    if(fail) toast(`강CRM에 찾아감을 못 남겼어요: ${fail}`);
+    else if(nm) toast('강CRM 악세 예약 메모가 달라서 체크는 강CRM에서 직접 해주세요 (수령 기록은 남겼어요)');
+    else if(ok||part) toast(`강CRM에 찾아감 반영했어요${part?' (남은 예약은 그대로)':''}`);
+    else if(wait&&!auto) toast(`${curStore().name} 강CRM 로그인이 필요해요 (⚙ → 🔗 강CRM 연결)`);
+  } finally{ pickSyncing=false; }
+}
+function doPickup(r){
+  const linked=okTel(r.phone);
+  if(!confirm(`${r.cname?r.cname+' 손님 · ':''}${r.text}\n찾아감으로 체크할까요?${linked?'\n강CRM 고객 카드에도 반영돼요.':''}`)) return;
+  r.status='picked'; r.pickedAt=Date.now(); delete r.pickedVia;
+  if(linked) r.crmPickPending=true;
+  save(); renderResv();
+  toast('찾아감으로 체크했어요');
+  if(linked) syncPickups(false);
+}
+
+$('#resvStages').addEventListener('click',e=>{ const b=e.target.closest('[data-rf]'); if(!b) return; S.resvF=b.dataset.rf; save(); renderResv(); });
 
 /* ---------- 설정 ---------- */
 function needKey(){ setStatus(`${curStore().name} AI 키가 없어요. 설정에서 넣어주세요.`,'err'); openSettings('accKey'); }
@@ -1088,12 +1424,14 @@ function fillSummaries(){
   else crmMsg(`${curStore().name}은(는) 아직 로그인 안 됨${wa||wd?` · 반영 대기 ${wa+wd}건 (넣기 ${wa} · 지우기 ${wd}) · 로그인하면 바로 반영돼요`:''}`);
   const k=getKey(); const sk=$('#sumKey'); sk.textContent=k?'키 있음 · …'+k.slice(-4):'키 없음'; sk.className=k?'':'bad';
   $('#sumRep').textContent=(S.blockTpl||S.totTpl)?'사진에서 배운 모양':(todayTitle());
+  { const sa=$('#sumArr'); if(sa){ sa.textContent=relayPw()?'바로 보내기 켜짐':'문자앱으로 보내기'; sa.className=''; } }
   syncStoreDel();
   try{ renderCloud(); }catch(e){}
 }
 function openSettings(openId){
   $('#tplRow').hidden=!(S.blockTpl||S.totTpl); $('#storeName').value=curStore().name; $('#key').value=getKey(); $('#model').value=G.model||'';
   $('#suffix').value=S.suffix||''; $('#amtStyle').value=S.amtStyle||'split'; $('#totStyle').value=S.totStyle||'pay';
+  $('#smsStore').value=S.smsStore||''; $('#tplArr').value=S.tplArr||ARR_TPL; $('#tplRem').value=S.tplRem||REM_TPL; $('#relayPwIn').value=relayPw(); $('#relayMsg').textContent='';
   $('#modelHint').textContent=G.model?'직접 정한 모델만 써요. 비우면 자동으로 골라요.':`비워두면 자동으로 골라요.${C().modelOk?' 지금 쓰는 모델: '+C().modelOk:''}`;
   document.querySelectorAll('#setDlg details').forEach(d=>d.open=(d.id===openId));
   if(!openId&&!getKey()) $('#accKey').open=true;
@@ -1115,9 +1453,28 @@ $('#setDlg').addEventListener('close',()=>{
   const k=$('#key').value.trim(); if(k!==getKey()) setKey(curStore().id,k);
   const sn=$('#storeName').value.trim(); if(sn&&sn!==curStore().name&&!G.stores.some(s=>s.name===sn)){ if(S.suffix===' '+curStore().name+' 영활비'&&$('#suffix').value.replace(/\s+$/,'')===S.suffix) $('#suffix').value=' '+sn+' 영활비'; curStore().name=sn; renderStores(); }
   const nk=$('#model').value.trim(); if(nk!==G.model){ G.model=nk; Object.values(G.mc||{}).forEach(c=>c.modelOk=''); }
-  S.suffix=$('#suffix').value.replace(/\s+$/,''); S.amtStyle=$('#amtStyle').value; S.totStyle=$('#totStyle').value; update();
+  S.suffix=$('#suffix').value.replace(/\s+$/,''); S.amtStyle=$('#amtStyle').value; S.totStyle=$('#totStyle').value;
+  S.smsStore=$('#smsStore').value.trim(); const ta=$('#tplArr').value.trim(), tr=$('#tplRem').value.trim();
+  if(ta&&ta!==ARR_TPL) S.tplArr=ta; else delete S.tplArr; if(tr&&tr!==REM_TPL) S.tplRem=tr; else delete S.tplRem;
+  try{ const pw=$('#relayPwIn').value.trim(); pw?localStorage.setItem(RELAY_PW_KEY,pw):localStorage.removeItem(RELAY_PW_KEY); }catch(e){}
+  update();
   if(getKey()&&$('#status').classList.contains('err')) setStatus('키를 넣었어요. 이제 사진을 읽어보세요.');
 });
+$('#tplArrReset').onclick=()=>{ $('#tplArr').value=ARR_TPL; $('#tplRem').value=REM_TPL; toast('기본 문구로 바꿨어요 (닫으면 저장돼요)'); };
+$('#relayTest').onclick=async()=>{
+  const m=$('#relayMsg'), say=(t,c='')=>{ m.textContent=t; m.className='status '+c; };
+  try{ const pw=$('#relayPwIn').value.trim(); pw?localStorage.setItem(RELAY_PW_KEY,pw):localStorage.removeItem(RELAY_PW_KEY); }catch(e){}
+  if(!window.KCRM||!crmEmail()){ say(`먼저 🔗 강CRM 연결에서 ${curStore().name} 로그인을 해주세요 (중계 서버 주소를 강CRM에서 가져와요)`,'err'); return; }
+  if(!relayPw()){ say('비밀번호를 넣어주세요','err'); return; }
+  say('확인하는 중…','busy');
+  try{
+    const info=await KCRM.arrivalInfo(curStore().id,[]);
+    if(!info.relayUrl){ say('강CRM에 중계 서버 주소가 없어요 (강CRM 설정에서 먼저 연결해 주세요)','err'); return; }
+    const st=await relaySend(info.relayUrl,{sms:'status'});
+    say(st.ready===false?'⚠️ 중계 서버는 연결됐는데 매장 폰(SMSGate)이 꺼져 있거나 연결이 안 돼 있어요':'✅ 연결됐어요. 도착 문자가 매장 폰으로 바로 나가요', st.ready===false?'err':'');
+    fillSummaries();
+  }catch(e){ say('❌ '+(e.message||'확인하지 못했어요'),'err'); }
+};
 $('#tplReset').onclick=()=>{ delete S.blockTpl; delete S.totTpl; delete S.gap; $('#tplRow').hidden=true; save(); update(); fillSummaries(); toast('기본 모양으로 되돌렸어요'); };
 // 👑 매장 삭제는 총관리자만 (강CRM 총관리자와 같은 계정) — 이 폰의 어느 매장이든 🔗 강CRM 연결에 총관리자로 로그인돼 있어야 함
 const ACC_ADMINS=['a44443353@gmail.com','phoneplace0070@gmail.com'];
@@ -1305,13 +1662,23 @@ async function pullCrm(quiet){
         miss.forEach(r=>{ const p=peek[r.phone]; if(p&&p.movedTo&&!drop.has(r)){ r.phone=p.movedTo; if(r.crm) r.crm.id=p.movedTo; moved++; } });   // 강CRM에서 번호를 바꾼 손님 → 새 번호로
       }
     }
+    // 📦 V11: 주문완료·도착 단계 예약을 강CRM에서 직접 찾아감 체크했으면 여기도 찾아감으로
+    let picked=0;
+    for(const st of G.stores){
+      if(!crmEmail(st.id)) continue;
+      const act=(st.data.resv||[]).filter(r=>(r.status==='ordered'||r.status==='arrived')&&okTel(r.phone)&&(r.crm||r.src==='crm'));
+      if(!act.length) continue;
+      let pk=null; try{ pk=await KCRM.peekAcc(st.id,[...new Set(act.map(r=>r.phone))]); }catch(e){ pk=null; }
+      if(pk) act.forEach(r=>{ const p=pk[r.phone]; if(p&&p.chk){ r.status='picked'; r.pickedAt=Date.now(); r.pickedVia='crm'; r.crmPicked='crm'; picked++; } });
+    }
+    if(picked){ S=G.stores[G.cur].data; save(); renderResv(); if(!quiet) toast(`강CRM에서 찾아감 ${picked}건 반영`); }
     if(quietFix&&!(got||moved||gone)){ S=G.stores[G.cur].data; save(); renderResv(); }
     if(got||moved||gone){ S=G.stores[G.cur].data; save(); renderResv(); update(); if(!quiet||got) toast([got?`강CRM에서 악세 예약 ${got}건 가져왔어요`:'',moved?`${moved}건 바뀜`:'',gone?`${gone}건 정리`:''].filter(Boolean).join(' · ')); }
   } finally { crmPulling=false; }
 }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') pullCrm(true); });
 setInterval(()=>{ if(document.visibilityState==='visible') pullCrm(true); },120000);
-window.addEventListener('kcrm-auth',()=>{ clearTimeout(window.__pullT); window.__pullT=setTimeout(()=>pullCrm(true),400); });
+window.addEventListener('kcrm-auth',()=>{ clearTimeout(window.__pullT); window.__pullT=setTimeout(()=>{ pullCrm(true); syncPickups(true); },400); });
 
 /* ---------- ☁️ 서버 저장 · 여러 폰 맞추기 (V10) ----------
    · 매장마다 서버 문서 하나 (acc_data/번호 = 내용 · acc_meta/번호 = 이름·버전) — 강CRM 직원 계정으로만 읽고 써요
@@ -1511,6 +1878,33 @@ async function movedCustomer(db, id) {
   } catch (e) { return null; }
 }
 const sameName = (a, b) => { const x = String(a || '').replace(/\s/g, ''), y = String(b || '').replace(/\s/g, ''); return !x || !y || x === y || x.includes(y) || y.includes(x); };
+// 📦 V11 도착 문자용 도우미 (강CRM과 같은 규칙)
+async function settingsOf(sl) {
+  if (sl.settings && Date.now() - sl.settingsAt < 5 * 60 * 1000) return sl.settings;
+  try { const s = await getDoc(doc(sl.db, 'smart_global', 'settings')); sl.settings = s.exists() ? (s.data() || {}) : {}; sl.settingsAt = Date.now(); }
+  catch (e) { if (!sl.settings) throw new Error(why(e)); }
+  return sl.settings;
+}
+const meName = (sl, st) => { const m = (st && st.staffByEmail) || {}, em = String((sl.user && sl.user.email) || ''); return String(m[em] || m[em.toLowerCase()] || '').trim() || em.split('@')[0]; };
+const CARD_ID_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789';   // 강CRM과 같은 글자 (헷갈리는 0 o 1 l 뺌)
+function newCardId() { const a = new Uint8Array(6); crypto.getRandomValues(a); return Array.from(a, b => CARD_ID_CHARS[b % CARD_ID_CHARS.length]).join(''); }
+function isNoNameK(v) {
+  const t = String(v || '').replace(/[\s.\-_~!?·,()\[\]"'*/]/g, '').toLowerCase();
+  if (!t) return true;
+  if (/^\d+$/.test(t) || /^[ㄱ-ㅎㅏ-ㅣ]+$/.test(t) || /^(x+|na|n\/a|unknown|noname|none|null|undefined|test|테스트)$/.test(t)) return true;
+  if (/^(고객|손님|이름|성함|미정|없음|무명|미입력|미기재|미확인|확인중|확인필요|모름|미상|익명|본인|고객님|님)$/.test(t)) return true;
+  return /(이름없|이름미|이름모|성함모|성함미|모름|미상|알수없|알수x|확인불가|이름확인)/.test(t);
+}
+function maskName(n) {
+  if (isNoNameK(n)) return '';
+  const ch = [...String(n).trim().replace(/\s+/g, '')];
+  if (ch.length <= 1) return ch.join('');
+  if (ch.length === 2) return ch[0] + '○';
+  return ch[0] + '○'.repeat(Math.min(ch.length - 2, 3)) + ch[ch.length - 1];
+}
+const p2 = n => String(n).padStart(2, '0');
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`; };
+const stampStr = d => `${d.getFullYear()}.${p2(d.getMonth() + 1)}.${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 // ☁️ 서버 저장 (V10): 로그인된 매장 아무거나로 (매장마다 로그인이 따로라서)
 function anySlot(pref) { const a = slot(pref); if (a.user) return a; for (const sl of slots.values()) if (sl.user) return sl; return null; }
 window.KCRM = {
@@ -1649,6 +2043,90 @@ window.KCRM = {
     if (!c) Object.assign(upd, { name: r.name || '', phone: id.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3'), salesStatus: '미정', visitDate: today, regDate: today, regBy: staff, manager: staff, regStore: r.store || '', memo: '악세정산 앱 예약으로 등록', createdAt: now });
     else if (!c.name && r.name) upd.name = r.name;
     try { await setDoc(ref, upd, { merge: true }); } catch (e) { throw new Error(why(e)); }
+  }
+  ,
+  /* 📦 V11 도착 문자 · 찾아감 ─────────────────────────────
+     · arrivalInfo: 매장 설정(문자 매장 이름·중계 서버 주소·직원 이름) + 직원 공용 명함 + 손님 카드(명함번호·담당자)
+     · ensureCard: 손님 명함번호가 없으면 만들기 (강CRM '명함 보내기'와 똑같이 · 명함 본인 확인용 가린 이름도)
+     · logContact: 손님 카드 연락 기록 + 보낸 문자 기록 (강CRM 연락 탭에 그대로 보여요)
+     · pickupAcc: 찾아감 → 강CRM 악세 예약 체크 (다른 예약이 남아 있으면 그 줄만 빼기) + 연락 기록 */
+  async arrivalInfo(sid, phones) {
+    const sl = slot(sid); if (!sl.user) throw new Error('강CRM 로그인이 필요해요');
+    const db = sl.db, st = await settingsOf(sl);
+    let team = null;
+    try { const t = await getDoc(doc(db, 'card_public', 'team')); team = t.exists() ? t.data() : null; } catch (e) { team = null; }
+    const customers = {};
+    for (const raw of [...new Set(phones || [])].slice(0, 30)) {
+      const id = String(raw || '').replace(/\D/g, '');
+      if (!/^01\d{8,9}$/.test(id)) continue;
+      let c = null, cid = id;
+      try { const s = await getDoc(doc(db, 'smart_customers', id)); c = s.exists() ? s.data() : null; } catch (e) { throw new Error(why(e)); }
+      if (!c) { const m = await movedCustomer(db, id); if (m) { c = m.data; cid = m.id; } }
+      customers[raw] = c && !c.deletedAt ? { id: cid, name: c.name || '', cardId: c.cardId || '', manager: c.manager || '' } : null;
+    }
+    return { me: meName(sl, st), email: sl.user.email, storeName: String(st.smsStoreName || '').trim(), relayUrl: String(st.pushRelayUrl || '').trim(), staffByEmail: st.staffByEmail || {}, team, customers };
+  },
+  async ensureCard(sid, custId, name) {
+    const sl = slot(sid); if (!sl.user) throw new Error('강CRM 로그인이 필요해요');
+    const ref = doc(sl.db, 'smart_customers', custId);
+    let made = false;
+    const id = await runTransaction(sl.db, async (tx) => {
+      const s = await tx.get(ref); if (!s.exists()) return '';
+      const c = s.data(); if (c.cardId) return c.cardId;
+      const nid = newCardId(); made = true; tx.set(ref, { cardId: nid }, { merge: true }); return nid;
+    }).catch(e => { throw new Error(why(e)); });
+    if (id && made) { try { await setDoc(doc(sl.db, 'card_who', id), { n: maskName(name), at: todayStr() }, { merge: true }); } catch (e) { /* 강CRM이 열릴 때 다시 맞춰요 */ } }
+    return id;
+  },
+  async logContact(sid, custId, o) {
+    const sl = slot(sid); if (!sl.user) throw new Error('강CRM 로그인이 필요해요');
+    const by = o.by || meName(sl, await settingsOf(sl)) || '담당자미상';
+    const ref = doc(sl.db, 'smart_customers', custId);
+    await runTransaction(sl.db, async (tx) => {
+      const s = await tx.get(ref); if (!s.exists()) return;
+      const c = s.data(), now = new Date();
+      const line = `[${stampStr(now)}] [${o.label || '악세'}] ${o.action} (담당: ${by})`;
+      const upd = { contactHistory: c.contactHistory ? c.contactHistory + '\n' + line : line, updatedAt: now.toISOString() };
+      if (o.sms) {
+        upd.smsLog = [...(Array.isArray(c.smsLog) ? c.smsLog : []), { at: now.toISOString(), by, text: String(o.sms).slice(0, 2000) }].slice(-20);
+        upd.lastContactDate = todayStr(); upd.contactManager = by;
+      }
+      tx.set(ref, upd, { merge: true });
+    }).catch(e => { throw new Error(why(e)); });
+  },
+  async pickupAcc(sid, x) {
+    const sl = slot(sid), db = sl.db; if (!sl.user) throw new Error('강CRM 로그인이 필요해요');
+    const id = String(x.phone || '').replace(/\D/g, '');
+    if (!/^01\d{8,9}$/.test(id)) return 'none';
+    let ref = doc(db, 'smart_customers', id);
+    let snap; try { snap = await getDoc(ref); } catch (e) { throw new Error(why(e)); }
+    if (!snap.exists()) { const m = await movedCustomer(db, id); if (!m) return 'none'; ref = doc(db, 'smart_customers', m.id); }
+    const by = x.by || meName(sl, await settingsOf(sl)) || '담당자미상';
+    return await runTransaction(db, async (tx) => {
+      const s = await tx.get(ref); if (!s.exists()) return 'none';
+      const c = s.data(), now = new Date();
+      const hl = `[${stampStr(now)}] [악세] 🛍️ 악세 수령 · ${String(x.text || '').slice(0, 80)} (담당: ${by})`;
+      const upd = { contactHistory: c.contactHistory ? c.contactHistory + '\n' + hl : hl, updatedAt: now.toISOString() };
+      let res = 'logged';
+      if (c.promAccDate || c.promAccMemo) {
+        if (c.promAccChk) res = 'already';
+        else {
+          const segs = String(c.promAccMemo || '').split(' + ').filter(Boolean);
+          const line = String(x.line || ''), text = String(x.text || '');
+          let i = segs.findIndex(sg => sg === line || (line && sg.startsWith(line + ' · ')));
+          if (i < 0 && text) { const cand = segs.map((sg, j) => (sg === text || sg.startsWith(text + ' · ') || sg.startsWith(text + ' ')) ? j : -1).filter(j => j >= 0); if (cand.length === 1) i = cand[0]; }
+          if (segs.length <= 1) { upd.promAccChk = true; res = 'checked'; }               // 예약이 하나뿐이면 그대로 체크 (메모는 기록으로 남김)
+          else if (i >= 0) {                                                              // 다른 예약이 남아 있으면 찾아간 줄만 빼기
+            const rest = segs.filter((_, j) => j !== i);
+            upd.promAccMemo = rest.join(' + ').slice(0, 300);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(x.nextDate || '')) upd.promAccDate = x.nextDate;
+            res = 'part';
+          } else res = 'nomatch';
+        }
+      }
+      tx.set(ref, upd, { merge: true });
+      return res;
+    }).catch(e => { throw new Error(why(e)); });
   }
 };
 fire();
