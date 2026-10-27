@@ -192,7 +192,14 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .tog.on{border-color:var(--acc);color:var(--acc);background:var(--acc-soft);font-weight:600}
 .bal{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);white-space:nowrap}
 .bal input{text-align:right}
-.pcalc{margin-top:8px;font-size:13px;display:flex;justify-content:space-between;gap:8px;background:var(--bg);border-radius:8px;padding:7px 10px;font-variant-numeric:tabular-nums}
+.pcalc{margin-top:8px;font-size:13px;background:var(--bg);border-radius:8px;padding:7px 10px;font-variant-numeric:tabular-nums}
+.pc1{display:flex;justify-content:space-between;gap:8px}
+.pc2{margin-top:4px;font-size:12px;color:var(--acc);line-height:1.6}
+.tagm{font-size:11px;font-weight:700;color:var(--acc);background:var(--acc-soft);border-radius:6px;padding:1px 6px}
+.adjb{display:block;width:100%;margin-top:7px;border:1px dashed var(--line);background:none;border-radius:8px;padding:6px;font-size:12px;font-weight:600;color:var(--sub)}
+.adjrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.adjsum{background:var(--bg);border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.7;margin-top:10px}
+.adjsum b.neg,.pc1 b.neg{color:var(--bad)}
 .pcalc b.neg{color:var(--bad)}
 .addp{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;background:var(--ink);color:var(--card);border-radius:12px;padding:13px;font-weight:700}
 
@@ -410,7 +417,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V11.1</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V11.2</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -463,6 +470,23 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   <div class="status" id="arrMsg" role="status" style="margin:8px 0 0"></div>
   <div class="row"><button type="button" id="arrOnly">도착만 체크</button><button type="button" class="pri" id="arrSend">도착 체크 + 문자 보내기</button></div>
   <div class="row" style="margin-top:6px"><button value="cancel" formnovalidate>닫기</button></div>
+</form></dialog>
+
+<dialog id="adjDlg"><form method="dialog" class="sheet">
+  <h3 id="adjTitle">금액 조정</h3>
+  <div class="hint" id="adjAuto"></div>
+  <label for="adjAmt">✏️ 이번 금액 직접 넣기</label>
+  <div style="display:flex;gap:8px"><input id="adjAmt" type="number" inputmode="numeric" placeholder="비우면 자동 계산"><button type="button" class="ghost" id="adjAutoBtn" style="flex:none;padding:8px 12px">자동으로</button></div>
+  <label>🤝 다른 사람 잔액에서 밀어주기</label>
+  <div class="hint">잔액이 모자랄 때, 다른 사람이 이 사람 대신 내줘요. 총 결제금액은 그대로고 잔액만 옮겨져요.</div>
+  <div id="adjList"></div>
+  <div class="grid2" style="margin-top:6px">
+    <select id="adjFrom" aria-label="밀어줄 사람"></select>
+    <input id="adjCover" type="number" inputmode="numeric" placeholder="밀어줄 금액" aria-label="밀어줄 금액">
+  </div>
+  <button type="button" class="ghost chk" id="adjAdd" style="margin-top:6px;width:100%">+ 밀어주기 넣기</button>
+  <div class="adjsum" id="adjSum"></div>
+  <div class="row"><button value="cancel" formnovalidate>취소</button><button value="ok" class="pri">저장</button></div>
 </form></dialog>
 
 <dialog id="itemDlg"><form method="dialog" class="sheet" id="itemForm">
@@ -560,9 +584,20 @@ function calc(){
   const n=mem.length, base=n?Math.floor(shared/n):0, rem=n?shared-base*n:0;
   const share={}; S.people.forEach(p=>share[p.id]=0);
   mem.forEach((p,i)=>share[p.id]=base+(i>=n-rem?1:0));
-  const rows=S.people.map(p=>({p,own:own[p.id],share:share[p.id],amt:own[p.id]+share[p.id],after:(+p.bal||0)-own[p.id]-share[p.id]}));
+  // ✏️ 직접 금액 (S.manual[사람] = 이번 금액) · 🤝 밀어주기 (S.covers = [{from,to,amt}] : from 잔액에서 to 대신 냄)
+  const man=S.manual||{}, ids=new Set(S.people.map(p=>p.id));
+  const covers=(S.covers||[]).filter(x=>x&&ids.has(x.from)&&ids.has(x.to)&&x.from!==x.to&&(+x.amt>0));
+  const cin={}, cout={}; S.people.forEach(p=>{ cin[p.id]=[]; cout[p.id]=[]; });
+  covers.forEach(x=>{ cin[x.to].push(x); cout[x.from].push(x); });
+  const rows=S.people.map(p=>{
+    const auto=own[p.id]+share[p.id], manual=man[p.id]!==undefined&&man[p.id]!==null&&man[p.id]!=='';
+    const amt=manual?Math.max(0,+man[p.id]||0):auto;
+    const inn=cin[p.id].reduce((a,x)=>a+(+x.amt),0), out=cout[p.id].reduce((a,x)=>a+(+x.amt),0);
+    const deduct=amt-inn+out;   // 이 사람 잔액에서 실제로 빠지는 돈
+    return {p,own:own[p.id],share:share[p.id],auto,manual,amt,cin:cin[p.id],cout:cout[p.id],inn,out,deduct,after:(+p.bal||0)-deduct};
+  });
   const total=rows.reduce((a,r)=>a+r.amt,0)+(n?0:shared);
-  return {rows,shared,total,unsetN,unsetSum,noMembers:shared>0&&!n};
+  return {rows,shared,total,unsetN,unsetSum,noMembers:shared>0&&!n,covers};
 }
 function fillBlock(tpl,name,label,amtLine,after){
   return tpl.split('\n').map(l=>{
@@ -571,9 +606,15 @@ function fillBlock(tpl,name,label,amtLine,after){
   }).filter(l=>l!==null).join('\n');
 }
 function fillTot(tpl,total){ return tpl.replace('{총액}',fmt(total)); }
+const pName=id=>{ const p=S.people.find(x=>x.id===id); return (p&&p.name)||'(이름 없음)'; };
+function coverNote(r){
+  const a=r.cin.map(x=>`${pName(x.from)}가 ${fmt(x.amt)}원 밀어줌`), b=r.cout.map(x=>`${pName(x.to)}에게 ${fmt(x.amt)}원 밀어줌`);
+  const t=[...a,...b].join(', ');
+  return t?` (${t})`:'';
+}
 function reportText(c){
-  const blocks=c.rows.filter(r=>r.amt>0).map(r=>{
-    const line=(S.amtStyle!=='sum'&&r.share>0)?`${fmt(r.own)}원+${fmt(r.share)}원`:`${fmt(r.amt)}원`;
+  const blocks=c.rows.filter(r=>r.amt>0||r.inn||r.out).map(r=>{
+    const line=((!r.manual&&S.amtStyle!=='sum'&&r.share>0)?`${fmt(r.own)}원+${fmt(r.share)}원`:`${fmt(r.amt)}원`)+coverNote(r);
     if(S.blockTpl) return fillBlock(S.blockTpl,r.p.name||'(이름 없음)',r.p.label,line,r.after);
     return [r.p.name||'(이름 없음)', r.p.label, line, `잔액 ${fmt(r.after)}원`].filter(Boolean).join('\n');
   });
@@ -637,13 +678,14 @@ function update(){
   const c=calc();
   c.rows.forEach(r=>{
     const el=document.querySelector(`.person[data-id="${r.p.id}"] [data-calc]`); if(!el) return;
-    el.innerHTML=r.amt?`<span>이번 ${fmt(r.own)}원${r.share?'+'+fmt(r.share)+'원':''}</span><span>→ 잔액 <b class="${r.after<0?'neg':''}">${fmt(r.after)}원</b></span>`
-                      :`<span style="color:var(--sub)">이번 주문 없음</span><span>잔액 ${fmt(r.p.bal)}원</span>`;
+    const left=r.manual?`이번 <b>${fmt(r.amt)}원</b> <span class="tagm">✏️ 직접</span>`:(r.amt?`이번 ${fmt(r.own)}원${r.share?'+'+fmt(r.share)+'원':''}`:`<span style="color:var(--sub)">이번 주문 없음</span>`);
+    const notes=[...r.cin.map(x=>`🤝 ${esc(pName(x.from))}가 ${fmt(x.amt)}원 밀어줌`),...r.cout.map(x=>`🤝 ${esc(pName(x.to))}에게 ${fmt(x.amt)}원 밀어줌`)];
+    el.innerHTML=`<div class="pc1"><span>${left}</span><span>${r.amt||r.inn||r.out?'→ ':''}잔액 <b class="${r.after<0?'neg':''}">${fmt(r.after)}원</b></span></div>${notes.length?`<div class="pc2">${notes.join('<br>')}</div>`:''}<button type="button" class="adjb" data-adj>✏️ 금액 · 🤝 밀어주기</button>`;
   });
   const w=[];
   if(c.unsetN) w.push(`누구 건지 안 정한 품목 ${c.unsetN}개(${fmt(c.unsetSum)}원)가 있어요. 위 목록에서 빨간 줄을 정해주세요.`);
   if(c.noMembers) w.push('공용 품목이 있는데 공용 나눔이 켜진 사람이 없어요.');
-  c.rows.filter(r=>r.amt>0&&r.after<0).forEach(r=>w.push(`${r.p.name} 잔액이 마이너스가 돼요.`));
+  c.rows.filter(r=>(r.amt>0||r.out)&&r.after<0).forEach(r=>w.push(`${r.p.name} 잔액이 마이너스가 돼요. (✏️ 금액 · 🤝 밀어주기로 다른 사람 잔액에서 낼 수 있어요)`));
   if(typeof renderResv==='function'&&S.resv){ const st=resvState(); if(S.items.length&&!st.stale&&st.miss.length) w.push(`예약 악세 ${st.miss.length}개가 이번 주문에 없어요: ${st.miss.map(r=>r.text).join(', ')}`); if(S.items.length&&st.P.length&&(st.stale||st.unchecked.length)) w.push('예약 악세가 있어요. 위에서 "빠진 거 확인"을 눌러보세요.'); }
   $('#warn').innerHTML=w.map(x=>`<div class="warnbox">${esc(x)}</div>`).join('');
   if(document.activeElement!==$('#title')) $('#title').value=S.title||todayTitle();
@@ -936,7 +978,7 @@ $('#itemDlg').addEventListener('close',()=>{
   renderItems(); update();
 });
 $('#addItem').onclick=()=>openItem(null);
-$('#clearItems').onclick=()=>{ if(!S.items.length) return; if(!confirm('주문 품목을 모두 지울까요? 인원·잔액은 그대로예요.')) return; S.items=[]; renderItems(); update(); setStatus('목록을 비웠어요.'); };
+$('#clearItems').onclick=()=>{ if(!S.items.length&&!Object.keys(S.manual||{}).length&&!(S.covers||[]).length) return; if(!confirm('주문 품목을 모두 지울까요? 직접 넣은 금액·밀어주기도 같이 지워져요. 인원·잔액은 그대로예요.')) return; S.items=[]; S.manual={}; S.covers=[]; renderItems(); update(); setStatus('목록을 비웠어요.'); };
 
 /* ---------- 인원 이벤트 ---------- */
 $('#people').addEventListener('input',e=>{
@@ -957,9 +999,59 @@ $('#people').addEventListener('click',e=>{
   if(e.target.closest('[data-tog]')){ p.shared=!p.shared; renderPeople(); update(); }
   else if(e.target.closest('[data-pdel]')){
     if(!confirm(`${p.name||'이 인원'}을(를) 뺄까요? 이 사람 품목은 '누구?'로 바뀌어요.`)) return;
-    S.people=S.people.filter(x=>x.id!==p.id); renderAll();
+    S.people=S.people.filter(x=>x.id!==p.id); if(S.manual) delete S.manual[p.id]; S.covers=(S.covers||[]).filter(x=>x.from!==p.id&&x.to!==p.id); renderAll();
   }
 });
+// ✏️ 금액 · 🤝 밀어주기 창 (저장을 눌러야 반영 · 취소하면 그대로)
+let ADJ=null;   // {pid, amt:''|number, covers:[{from,amt}]}
+function adjCalc(){
+  const c=calc(), r=c.rows.find(x=>x.p.id===ADJ.pid); if(!r) return null;
+  const amt=ADJ.amt===''?r.auto:Math.max(0,+ADJ.amt||0);
+  const inn=ADJ.covers.reduce((a,x)=>a+(+x.amt||0),0);
+  return {r,amt,inn,after:(+r.p.bal||0)-amt+inn+r.out};
+}
+function adjRender(){
+  const k=adjCalc(); if(!k) return;
+  const {r}=k;
+  $('#adjAuto').textContent=`자동 계산: ${fmt(r.auto)}원${r.share?` (개인 ${fmt(r.own)}원 + 공용 ${fmt(r.share)}원)`:''} · 현재 잔액 ${fmt(r.p.bal)}원`;
+  $('#adjList').innerHTML=ADJ.covers.map((x,i)=>`<div class="adjrow"><span>🤝 <b>${esc(pName(x.from))}</b>가 ${fmt(x.amt)}원 밀어줌 <small style="color:var(--sub)">(${esc(pName(x.from))} 잔액 ${fmt(+(S.people.find(p=>p.id===x.from)||{}).bal||0)}원)</small></span><button type="button" class="x" data-adjdel="${i}" aria-label="빼기">×</button></div>`).join('');
+  const short=Math.max(0,k.amt-k.inn-r.out-(+r.p.bal||0));
+  const others=S.people.filter(p=>p.id!==ADJ.pid&&p.name);
+  const keep=$('#adjFrom').value;
+  $('#adjFrom').innerHTML=`<option value="">누가 밀어줄까요?</option>`+others.map(p=>`<option value="${p.id}">${esc(p.name)} (잔액 ${fmt(p.bal)}원)</option>`).join('');
+  if(keep&&others.some(p=>p.id===keep)) $('#adjFrom').value=keep;
+  $('#adjCover').placeholder=short?`모자란 돈 ${fmt(short)}원`:'밀어줄 금액';
+  $('#adjSum').innerHTML=`이번 금액 <b>${fmt(k.amt)}원</b>${ADJ.amt!==''?' (직접)':''}${k.inn?` − 밀어받음 ${fmt(k.inn)}원`:''}${r.out?` + 남에게 밀어줌 ${fmt(r.out)}원`:''}<br>→ ${esc(r.p.name||'')} 잔액 <b class="${k.after<0?'neg':''}">${fmt(k.after)}원</b>${k.after<0?' (모자라요)':''}`;
+}
+function openAdj(pid){
+  const p=S.people.find(x=>x.id===pid); if(!p) return;
+  const m=(S.manual||{})[pid];
+  ADJ={pid,amt:m===undefined||m===null?'':String(m),covers:(S.covers||[]).filter(x=>x.to===pid).map(x=>({from:x.from,amt:+x.amt}))};
+  $('#adjTitle').textContent=`${p.name||'이 사람'} · 이번 금액 조정`;
+  $('#adjAmt').value=ADJ.amt; $('#adjCover').value=''; $('#adjFrom').value='';
+  adjRender(); $('#adjDlg').showModal();
+}
+$('#people').addEventListener('click',e=>{ const b=e.target.closest('[data-adj]'); if(!b) return; openAdj(b.closest('.person').dataset.id); });
+$('#adjAmt').addEventListener('input',e=>{ ADJ.amt=e.target.value.trim()===''?'':String(Math.max(0,num(e.target.value))); adjRender(); });
+$('#adjAutoBtn').onclick=()=>{ ADJ.amt=''; $('#adjAmt').value=''; adjRender(); };
+$('#adjAdd').onclick=()=>{
+  const from=$('#adjFrom').value; if(!from){ toast('누가 밀어줄지 골라주세요'); return; }
+  const k=adjCalc(); const short=Math.max(0,k.amt-k.inn-k.r.out-(+k.r.p.bal||0));
+  const amt=num($('#adjCover').value)||short;
+  if(!(amt>0)){ toast('밀어줄 금액을 넣어주세요'); return; }
+  const ex=ADJ.covers.find(x=>x.from===from); if(ex) ex.amt+=amt; else ADJ.covers.push({from,amt});
+  $('#adjCover').value=''; $('#adjFrom').value=''; adjRender();
+};
+$('#adjList').addEventListener('click',e=>{ const b=e.target.closest('[data-adjdel]'); if(!b) return; ADJ.covers.splice(+b.dataset.adjdel,1); adjRender(); });
+$('#adjDlg').addEventListener('close',()=>{
+  if($('#adjDlg').returnValue==='ok'&&ADJ){
+    S.manual=S.manual||{}; if(ADJ.amt==='') delete S.manual[ADJ.pid]; else S.manual[ADJ.pid]=+ADJ.amt;
+    S.covers=(S.covers||[]).filter(x=>x.to!==ADJ.pid).concat(ADJ.covers.filter(x=>x.amt>0).map(x=>({from:x.from,to:ADJ.pid,amt:+x.amt})));
+    update(); toast('반영했어요');
+  }
+  ADJ=null;
+});
+
 $('#addPerson').onclick=()=>{
   S.people.push({id:nid(),name:'',label:'고객서비스/공용',shared:false,bal:0}); renderAll();
   const ins=document.querySelectorAll('.person .nm'); const last=ins[ins.length-1]; last.focus(); last.scrollIntoView({block:'center'});
@@ -986,12 +1078,13 @@ $('#confirmBtn').onclick=()=>{
   if(!rs.stale&&rs.miss.length&&!confirm(`예약 악세 ${rs.miss.length}개가 이번 주문에 없어요.\n(${rs.miss.map(r=>r.text).join(', ')})\n그래도 확정할까요?`)) return;
   if(!confirm(`[${curStore().name}] 총 ${fmt(c.total)}원으로 확정하고 각자 잔액에서 뺄까요?\n주문 목록은 비워져요. 바로 아래 '되돌리기'로 취소할 수 있어요.`)) return;
   const text=reportText(c);
-  const deltas=c.rows.filter(r=>r.amt>0).map(r=>({id:r.p.id,amt:r.amt}));
+  const deltas=c.rows.filter(r=>r.amt>0||r.inn||r.out).map(r=>({id:r.p.id,amt:r.deduct}));
   deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); p.bal=(+p.bal||0)-d.amt; });
   const ttl=S.title||todayTitle(); const doneIds=[];
   if(!rs.stale) rs.ok.forEach(r=>{ r.status='ordered'; r.orderTitle=ttl; r.orderedAt=Date.now(); doneIds.push(r.id); });
   S.resv&&S.resv.forEach(r=>delete r.chk); delete S.resvSig;
-  S.history.unshift({at:Date.now(),title:ttl,total:c.total,text,deltas,items:S.items,resvDone:doneIds});
+  S.history.unshift({at:Date.now(),title:ttl,total:c.total,text,deltas,items:S.items,resvDone:doneIds,manual:S.manual||{},covers:S.covers||[]});
+  S.manual={}; S.covers=[];
   S.history=S.history.slice(0,30);
   S.items=[]; S.title=''; S.filter='all'; renderAll(); setStatus('확정했어요. 다음 주문표를 찍으면 돼요.');
   copy(text).then(ok=>toast(ok?'확정했어요. 보고도 복사해 뒀어요':'확정했어요'));
@@ -1006,7 +1099,7 @@ $('#hist').addEventListener('click',async e=>{
     if(!S.items.length&&!confirm(`${h.title} 정산을 취소하고 잔액을 되돌릴까요?`)) return;
     h.deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); if(p) p.bal=(+p.bal||0)+d.amt; });
     (h.resvDone||[]).forEach(id=>{ const r=(S.resv||[]).find(x=>x.id===id); if(r&&r.status==='ordered'){ r.status='wait'; delete r.orderTitle; delete r.orderedAt; } });
-    S.items=h.items||[]; S.title=h.title; S.history.shift(); delete S.resvSig; renderAll(); toast('되돌렸어요');
+    S.items=h.items||[]; S.title=h.title; S.manual=h.manual||{}; S.covers=h.covers||[]; S.history.shift(); delete S.resvSig; renderAll(); toast('되돌렸어요');
   }
 });
 
