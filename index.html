@@ -2183,22 +2183,28 @@ window.KCRM = {
     let ref = doc(db, 'smart_customers', id);
     let snap;
     try { snap = await getDoc(ref); } catch (e) { throw new Error(why(e)); }
-    let c = snap.exists() ? snap.data() : null;
-    if (!c) { const m = await movedCustomer(db, id); if (!m) return 'none'; ref = doc(db, 'smart_customers', m.id); c = m.data; }
-    if (!c.promAccDate && !c.promAccMemo) return 'none';
-    if (c.promAccChk) return 'none';                                   // 이미 찾아간(체크된) 기록은 그대로 둠
-    const segs = String(c.promAccMemo || '').split(' + ');
+    if (!snap.exists()) { const m = await movedCustomer(db, id); if (!m) return 'none'; ref = doc(db, 'smart_customers', m.id); }
     const line = String(x.line || ''), text = String(x.text || '');
-    // 정확히 같은 줄을 먼저 찾고, 없을 때만 품목 이름으로 (그것도 딱 한 줄일 때만 · '필름'으로 '필름 2개'를 지우지 않게)
-    let i = segs.findIndex(sg => sg === line || (line && sg.startsWith(line + ' · ')));
-    if (i < 0 && text) { const cand = segs.map((sg, j) => (sg === text || sg.startsWith(text + ' · ') || sg.startsWith(text + ' ')) ? j : -1).filter(j => j >= 0); if (cand.length === 1) i = cand[0]; }
-    if (i < 0) return 'nomatch';
-    const rest = segs.filter((_, j) => j !== i);
-    const upd = rest.length
-      ? { promAccMemo: rest.join(' + ').slice(0, 300), ...(/^\d{4}-\d{2}-\d{2}$/.test(x.nextDate || '') ? { promAccDate: x.nextDate } : {}), updatedAt: new Date().toISOString() }
-      : { promAccDate: '', promAccMemo: '', promAccChk: false, promAccFrom: '', promAccKey: '', promAccStore: '', updatedAt: new Date().toISOString() };
-    try { await setDoc(ref, upd, { merge: true }); } catch (e) { throw new Error(why(e)); }
-    return rest.length ? 'part' : 'cleared';
+    // V12: 읽고 고치는 사이 강CRM에서 같은 고객을 고쳐도 서로 지워지지 않게 트랜잭션으로 (찾아감과 같은 방식)
+    try {
+      return await runTransaction(db, async (tx) => {
+        const s2 = await tx.get(ref); if (!s2.exists()) return 'none';
+        const c = s2.data();
+        if (!c.promAccDate && !c.promAccMemo) return 'none';
+        if (c.promAccChk) return 'none';                                   // 이미 찾아간(체크된) 기록은 그대로 둠
+        const segs = String(c.promAccMemo || '').split(' + ');
+        // 정확히 같은 줄을 먼저 찾고, 없을 때만 품목 이름으로 (그것도 딱 한 줄일 때만 · '필름'으로 '필름 2개'를 지우지 않게)
+        let i = segs.findIndex(sg => sg === line || (line && sg.startsWith(line + ' · ')));
+        if (i < 0 && text) { const cand = segs.map((sg, j) => (sg === text || sg.startsWith(text + ' · ') || sg.startsWith(text + ' ')) ? j : -1).filter(j => j >= 0); if (cand.length === 1) i = cand[0]; }
+        if (i < 0) return 'nomatch';
+        const rest = segs.filter((_, j) => j !== i);
+        const upd = rest.length
+          ? { promAccMemo: rest.join(' + ').slice(0, 300), ...(/^\d{4}-\d{2}-\d{2}$/.test(x.nextDate || '') ? { promAccDate: x.nextDate } : {}), updatedAt: new Date().toISOString() }
+          : { promAccDate: '', promAccMemo: '', promAccChk: false, promAccFrom: '', promAccKey: '', promAccStore: '', updatedAt: new Date().toISOString() };
+        tx.set(ref, upd, { merge: true });
+        return rest.length ? 'part' : 'cleared';
+      });
+    } catch (e) { throw new Error(why(e)); }
   },
   // 강CRM 고객에 '악세 예약' 약속 넣기 (없는 손님이면 미정 고객으로 새로 등록)
   async addAcc(r, sid) {
@@ -2209,27 +2215,34 @@ window.KCRM = {
     let ref = doc(db, 'smart_customers', id);
     const now = new Date().toISOString(), today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
     const line = `${r.text}${r.qty > 1 ? ' ' + r.qty + '개' : ''}${r.memo ? ' (' + r.memo + ')' : ''}`;
-    const staff = r.staff || user.email.split('@')[0];
+    let staff = r.staff || '';
+    if (!staff) { try { staff = meName(sl, await settingsOf(sl)) || ''; } catch (e) { staff = ''; } }   // V12: 이메일 앞부분 말고 강CRM 직원 이름으로 (담당자 필터 · 실적이 맞게)
+    if (!staff) staff = user.email.split('@')[0];
     let snap;
     try { snap = await getDoc(ref); } catch (e) { throw new Error(why(e)); }
-    let c = snap.exists() ? snap.data() : null;
-    if (!c) {   // 번호를 바꾼 손님이면 새 번호 카드에 (이름이 다르면 번호가 다른 분께 넘어간 것 → 새로 등록)
+    if (!snap.exists()) {   // 번호를 바꾼 손님이면 새 번호 카드에 (이름이 다르면 번호가 다른 분께 넘어간 것 → 새로 등록)
       const m = await movedCustomer(db, id);
-      if (m && sameName(m.data.name, r.name)) { ref = doc(db, 'smart_customers', m.id); c = m.data; }
+      if (m && sameName(m.data.name, r.name)) ref = doc(db, 'smart_customers', m.id);
     }
-    let date = r.date, memo = `${line} · ${r.store} 악세정산`;
-    if (c && c.promAccDate && !c.promAccChk && c.promAccMemo) {
-      // 아직 안 찾아간 악세 예약이 있으면 합쳐서 (같은 예약의 예전 줄은 빼고 · 날짜는 빠른 쪽)
-      const others = String(c.promAccMemo).split(' + ').filter(sg => !(sg === line || sg.startsWith(line + ' · ')));   // 같은 줄만 빼기 ('아이폰17 케이스'로 '아이폰17 케이스 맥세이프'를 지우지 않게)
-      if (others.length) {
-        date = String(c.promAccDate) < date ? String(c.promAccDate) : date;
-        memo = `${others.join(' + ')} + ${line}`;
-      }
-    }
-    const upd = { promAccDate: date, promAccMemo: memo.slice(0, 300), promAccChk: false, promAccFrom: 'acc', promAccStore: r.store || '', promAccKey: '', updatedAt: now };
-    if (!c) Object.assign(upd, { name: r.name || '', phone: id.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3'), salesStatus: '미정', visitDate: today, regDate: today, regBy: staff, manager: staff, regStore: r.store || '', memo: '악세정산 앱 예약으로 등록', createdAt: now });
-    else if (!c.name && r.name) upd.name = r.name;
-    try { await setDoc(ref, upd, { merge: true }); } catch (e) { throw new Error(why(e)); }
+    // V12: 읽고 합치는 사이 강CRM에서 같은 고객의 악세 예약을 고쳐도 한쪽 줄이 사라지지 않게 트랜잭션으로
+    try {
+      await runTransaction(db, async (tx) => {
+        const s2 = await tx.get(ref), c = s2.exists() ? s2.data() : null;
+        let date = r.date, memo = `${line} · ${r.store} 악세정산`;
+        if (c && c.promAccDate && !c.promAccChk && c.promAccMemo) {
+          // 아직 안 찾아간 악세 예약이 있으면 합쳐서 (같은 예약의 예전 줄은 빼고 · 날짜는 빠른 쪽)
+          const others = String(c.promAccMemo).split(' + ').filter(sg => !(sg === line || sg.startsWith(line + ' · ')));   // 같은 줄만 빼기
+          if (others.length) {
+            date = String(c.promAccDate) < date ? String(c.promAccDate) : date;
+            memo = `${others.join(' + ')} + ${line}`;
+          }
+        }
+        const upd = { promAccDate: date, promAccMemo: memo.slice(0, 300), promAccChk: false, promAccFrom: 'acc', promAccStore: r.store || '', promAccKey: '', promAccBy: staff, updatedAt: now };
+        if (!c) Object.assign(upd, { name: r.name || '', phone: id.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3'), salesStatus: '미정', visitDate: today, regDate: today, regBy: staff, manager: staff, regStore: r.store || '', memo: '악세정산 앱 예약으로 등록', createdAt: now });
+        else if (!c.name && r.name) upd.name = r.name;
+        tx.set(ref, upd, { merge: true });
+      });
+    } catch (e) { throw new Error(why(e)); }
   }
   ,
   /* 📦 V11 도착 문자 · 찾아감 ─────────────────────────────
