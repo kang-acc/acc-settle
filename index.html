@@ -191,6 +191,16 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .tog{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;padding:5px 10px;font-size:13px;color:var(--sub);background:none;white-space:nowrap}
 .tog.on{border-color:var(--acc);color:var(--acc);background:var(--acc-soft);font-weight:600}
 .bal{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);white-space:nowrap}
+/* 💰 잔액 충전 (월초 영활비) */
+.prow2{grid-template-columns:auto 1fr auto}
+.topb{border:1px solid var(--acc);color:var(--acc);background:var(--acc-soft);border-radius:20px;padding:5px 10px;font-size:13px;font-weight:700;white-space:nowrap}
+.topall{display:block;width:100%;margin:0 0 8px;border:1.5px solid var(--acc);background:var(--acc-soft);color:var(--acc);border-radius:12px;padding:11px;font-size:14px;font-weight:800}
+.sheet label.toprow{display:grid;grid-template-columns:22px 1fr 120px;gap:8px;align-items:center;margin:0;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink)}
+.toprow input[type=checkbox]{width:20px;height:20px;padding:0;accent-color:var(--acc)}
+.toprow small{display:block;font-size:11.5px;color:var(--sub)}
+.toprow .done{color:var(--acc);font-weight:700}
+.toprow input[type=number]{text-align:right}
+.hrow .tpl{font-size:11px;font-weight:800;color:var(--acc);background:var(--acc-soft);border-radius:6px;padding:1px 6px;margin-right:4px}
 .bal input{text-align:right}
 .pcalc{margin-top:8px;font-size:13px;background:var(--bg);border-radius:8px;padding:7px 10px;font-variant-numeric:tabular-nums}
 .pc1{display:flex;justify-content:space-between;gap:8px}
@@ -295,6 +305,7 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   </div>
 
   <h2><span>인원<span class="storetag" data-storename></span></span> <small>공용은 켜진 사람끼리 나눠요</small></h2>
+  <button type="button" class="topall" id="topAllBtn">💰 월초 영활비 충전 (한 번에)</button>
   <div id="people"></div>
   <button class="addp" id="addPerson"><b>+</b> 인원 추가</button>
 
@@ -470,6 +481,14 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
   <div class="status" id="arrMsg" role="status" style="margin:8px 0 0"></div>
   <div class="row"><button type="button" id="arrOnly">도착만 체크</button><button type="button" class="pri" id="arrSend">도착 체크 + 문자 보내기</button></div>
   <div class="row" style="margin-top:6px"><button value="cancel" formnovalidate>닫기</button></div>
+</form></dialog>
+
+<dialog id="topDlg"><form method="dialog" class="sheet">
+  <h3 id="topTitle">💰 잔액 충전</h3>
+  <div class="hint" id="topHint">충전할 금액을 넣으면 각자 잔액에 더해져요. 지난 정산에 기록되고, 바로 아래 '되돌리기'로 취소할 수 있어요.</div>
+  <div id="topList"></div>
+  <div class="adjsum" id="topSum"></div>
+  <div class="row"><button value="cancel" formnovalidate>취소</button><button value="ok" class="pri" id="topOk">충전하기</button></div>
 </form></dialog>
 
 <dialog id="adjDlg"><form method="dialog" class="sheet">
@@ -670,6 +689,7 @@ function renderPeople(){
       <div class="prow2">
         <button class="tog${p.shared?' on':''}" data-tog aria-pressed="${p.shared}">${p.shared?'✓ 공용 나눔':'공용 안 냄'}</button>
         <div class="bal">현재 잔액<input type="number" inputmode="numeric" value="${p.bal||''}" data-f="bal" placeholder="0" aria-label="현재 잔액"></div>
+        <button type="button" class="topb" data-top aria-label="${esc(p.name||'')} 잔액 충전">＋ 충전</button>
       </div>
       <div class="pcalc" data-calc></div>
     </div>`).join('');
@@ -697,7 +717,7 @@ function update(){
 }
 function renderHist(){
   $('#hist').innerHTML=S.history.length?S.history.slice(0,10).map((h,i)=>`
-    <div class="hrow"><div>${esc(h.title)} · ${fmt(h.total)}원<span>${esc(new Date(h.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}</span></div>
+    <div class="hrow"><div>${h.type==='topup'?'<span class="tpl">💰 충전</span>':''}${esc(h.title)} · ${h.type==='topup'?'+':''}${fmt(h.total)}원<span>${esc(new Date(h.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}</span></div>
     <div style="display:flex;gap:6px"><button data-hcopy="${i}">복사</button>${i===0?'<button data-undo>되돌리기</button>':''}</div></div>`).join('')
     :'<div class="empty">확정한 정산이 여기에 쌓여요.</div>';
 }
@@ -1032,6 +1052,44 @@ function openAdj(pid){
   adjRender(); $('#adjDlg').showModal();
 }
 $('#people').addEventListener('click',e=>{ const b=e.target.closest('[data-adj]'); if(!b) return; openAdj(b.closest('.person').dataset.id); });
+
+/* ---------- 💰 잔액 충전 (월초 영활비 · 한 사람씩 또는 한 번에) ----------
+   · 금액은 사람마다 지난번 충전 금액을 기억 (p.topAmt) · 이번 달 충전했으면 p.topMon = 'YYYY-MM' 표시
+   · 지난 정산에 '💰 충전'으로 남고 (deltas: +금액) · 맨 위면 되돌리기 가능 · 보고 복사도 가능 */
+const curMon=()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+let TOP={ids:[]};
+function openTop(ids){
+  TOP={ids:ids.slice(), all:ids.length>1};
+  const mon=curMon(), m=+mon.slice(5);
+  $('#topTitle').textContent=TOP.all?`💰 ${m}월 영활비 충전`:`💰 ${pName(ids[0])} 잔액 충전`;
+  $('#topList').innerHTML=ids.map(id=>{ const p=S.people.find(x=>x.id===id); const done=p.topMon===mon;
+    return `<label class="toprow" data-tid="${id}"><input type="checkbox" data-tchk ${done&&TOP.all?'':'checked'} aria-label="${esc(p.name||'')} 충전"><span><b>${esc(p.name||'(이름 없음)')}</b><small>잔액 ${fmt(p.bal)}원${done?` · <span class="done">${m}월 충전함</span>`:''}</small></span><input type="number" inputmode="numeric" data-tamt value="${p.topAmt||''}" placeholder="충전 금액" aria-label="${esc(p.name||'')} 충전 금액"></label>`; }).join('');
+  topSum(); $('#topDlg').showModal();
+  if(!TOP.all) setTimeout(()=>{ const i=$('#topList [data-tamt]'); if(i){ i.focus(); i.select(); } },50);
+}
+function topPicks(){ return [...document.querySelectorAll('#topList .toprow')].map(r=>({id:r.dataset.tid, on:r.querySelector('[data-tchk]').checked, amt:Math.max(0,Math.round(num(r.querySelector('[data-tamt]').value)))})).filter(x=>x.on&&x.amt>0); }
+function topSum(){
+  const P=topPicks(), tot=P.reduce((a,x)=>a+x.amt,0);
+  $('#topSum').innerHTML=P.length?P.map(x=>{ const p=S.people.find(y=>y.id===x.id); return `${esc(p.name||'')} ${fmt(p.bal)}원 → <b>${fmt((+p.bal||0)+x.amt)}원</b>`; }).join('<br>')+`<br>합계 <b>+${fmt(tot)}원</b>`:'충전할 사람과 금액을 넣어 주세요.';
+  $('#topOk').disabled=!P.length;
+}
+$('#topList').addEventListener('input',topSum); $('#topList').addEventListener('change',topSum);
+$('#topAllBtn').onclick=()=>{ if(!S.people.length){ toast('먼저 인원을 추가해 주세요'); return; } openTop(S.people.map(p=>p.id)); };
+$('#people').addEventListener('click',e=>{ const b=e.target.closest('[data-top]'); if(!b) return; openTop([b.closest('.person').dataset.id]); });
+$('#topDlg').addEventListener('close',async()=>{
+  if($('#topDlg').returnValue!=='ok') return;
+  const P=topPicks(); if(!P.length) return;
+  if(await syncBeforeAction()) return;
+  const mon=curMon(), m=+mon.slice(5), tot=P.reduce((a,x)=>a+x.amt,0);
+  const lines=[];
+  P.forEach(x=>{ const p=S.people.find(y=>y.id===x.id); if(!p) return; p.bal=(+p.bal||0)+x.amt; p.topAmt=x.amt; if(TOP.all||x.amt>=10000) p.topMon=mon; lines.push(`${p.name||'(이름 없음)'} +${fmt(x.amt)}원 → 잔액 ${fmt(p.bal)}원`); });
+  const title=TOP.all?`${m}월 영활비 충전`:`${pName(P[0].id)} 잔액 충전`;
+  const text=`[${curStore().name}] ${title}\n\n${lines.join('\n')}\n\n합계 +${fmt(tot)}원`;
+  S.history.unshift({type:'topup',at:Date.now(),title,total:tot,text,deltas:P.map(x=>({id:x.id,amt:x.amt})),mon});
+  S.history=S.history.slice(0,30);
+  renderAll();
+  toast(`충전했어요 · 합계 +${fmt(tot)}원 (지난 정산에서 보고 복사 · 되돌리기)`);
+});
 $('#adjAmt').addEventListener('input',e=>{ ADJ.amt=e.target.value.trim()===''?'':String(Math.max(0,num(e.target.value))); adjRender(); });
 $('#adjAutoBtn').onclick=()=>{ ADJ.amt=''; $('#adjAmt').value=''; adjRender(); };
 $('#adjAdd').onclick=()=>{
@@ -1095,6 +1153,11 @@ $('#hist').addEventListener('click',async e=>{
   if(e.target.closest('[data-undo]')){
     if(await syncBeforeAction()) return;
     const h=S.history[0];
+    if(h.type==='topup'){   // 💰 충전 되돌리기: 잔액만 빼고 주문 목록은 그대로
+      if(!confirm(`${h.title}을(를) 취소하고 충전한 금액을 잔액에서 다시 뺄까요?`)) return;
+      h.deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); if(p){ p.bal=(+p.bal||0)-d.amt; if(p.topMon===h.mon) delete p.topMon; } });
+      S.history.shift(); renderAll(); toast('충전을 되돌렸어요'); return;
+    }
     if(S.items.length&&!confirm('지금 목록에 있는 품목은 지워지고 그때 품목으로 돌아가요. 되돌릴까요?')) return;
     if(!S.items.length&&!confirm(`${h.title} 정산을 취소하고 잔액을 되돌릴까요?`)) return;
     h.deltas.forEach(d=>{ const p=S.people.find(x=>x.id===d.id); if(p) p.bal=(+p.bal||0)+d.amt; });
