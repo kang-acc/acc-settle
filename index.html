@@ -580,8 +580,15 @@ function toast(m){ const t=$('#toast'); const dlg=document.querySelector('dialog
 function setStatus(m,cls=''){ const s=$('#status'); s.textContent=m; s.className='status '+cls; }
 
 /* ---------- 메모 → 사람 연결 ---------- */
+// 태훈(조영자) → 괄호 안은 고객 이름이라 빼고 '태훈'으로
+const memoCore=memo=>String(memo||'').replace(/[(（\[][^)）\]]*[)）\]]?/g,'').replace(/\s/g,'');
+// 태훈/최수 · 태훈,최수 → ['태훈','최수'] (두 사람 이상일 때만)
+function memoNames(memo){
+  const parts=String(memo||'').replace(/[(（\[][^)）\]]*[)）\]]?/g,'').split(/[\/,，、+&·]|\s+및\s+/).map(x=>x.replace(/\s/g,'')).filter(Boolean);
+  return parts.length>=2?parts:[];
+}
 function matchTo(memo){
-  const m=String(memo||'').replace(/\s/g,'');
+  const m=memoCore(memo);
   if(!m) return '';
   if(/공용|공통/.test(m)) return 'shared';
   const p=S.people.find(p=>p.name&&(m===p.name||m.includes(p.name)||p.name.includes(m)));
@@ -672,7 +679,7 @@ function renderItems(){
     return `<div class="item${v===''?' unset':''}${v==='ex'?' ex':''}" data-id="${it.id}">
       <div class="iname" data-edit>${esc(it.name)}</div>
       <div class="itot">${fmt(it.total)}원</div>
-      <div class="imeta">${esc([it.opt, it.price?fmt(it.price)+'원 × '+(it.qty||1):'', it.memo?'메모 '+it.memo:''].filter(Boolean).join(' · '))}</div>
+      <div class="imeta">${esc([it.opt, it.price?fmt(it.price)+'원 × '+(it.qty||1):'', it.split?'👥 '+it.split:(it.memo?'메모 '+it.memo:'')].filter(Boolean).join(' · '))}</div>
       <div class="iact"><select class="${cls}" data-to aria-label="누구 품목">${toOptions(v)}</select><button class="x" data-del aria-label="삭제">×</button></div>
       ${it.dup?'<div class="flag">앞 사진과 겹친 줄 같아서 뺐어요</div>':''}
       ${mismatch?'<div class="flag">단가×수량과 합계가 달라요. 눌러서 확인</div>':''}
@@ -760,7 +767,7 @@ const PROMPT=`사진이 아래 A, B 중 무엇인지 판단해서 JSON 객체 �
 A) 휴대폰 액세서리 주문 내역 표 (열: 사진, 제품명, 옵션, 단가/적립, 수량, 합계/적립, 메모)
 {"type":"order","items":[{"name":"제품명 전체","option":"옵션","price":단가,"qty":수량,"total":합계,"memo":"메모"}]}
 - 모든 행을 위에서 아래 순서대로. 숫자는 쉼표와 '원' 없이 정수. 'point' 적립 숫자는 무시.
-- 메모는 사람 이름이나 '공용' 같은 짧은 글자. 그대로 적기.
+- 메모는 사람 이름이나 '공용' 같은 짧은 글자. 그대로 적기. '태훈/최수'처럼 / 로 여러 명이면 / 도, '태훈(조영자)'처럼 괄호도 그대로.
 - 사진 끝에서 잘려 합계나 메모가 안 보이는 행은 빼기. 빛 반사로 가려진 글자는 보이는 만큼.
 
 B) 사람별 정산(영활비·사용내역) 보고 메시지. 제목 줄, 사람마다 이름·구분·이번 금액·잔액, 마지막에 총액이 있음. 줄 순서와 모양은 매장마다 다를 수 있음 (예: 구분이 먼저 나오거나, 이름과 금액이 한 줄에 있음).
@@ -908,13 +915,21 @@ async function handleFiles(files){
       const d=await readPhoto(files[i]);
       if(d.type==='report'){ report=d; continue; }
       if(d.type!=='order'||!Array.isArray(d.items)||!d.items.length){ none++; continue; }
-      const batch=nid(); const prev=new Set(S.items.map(sig));
+      const batch=nid(); const prev=new Set(S.items.map(x=>x.sig0||sig(x)));
       d.items.forEach(r=>{
         const qty=num(r.qty)||1, price=num(r.price), total=num(r.total)||price*qty;
         if(!total&&!r.name) return;
         const it={id:nid(),name:String(r.name||'').trim(),opt:String(r.option||'').trim(),price,qty,total,memo:String(r.memo||'').trim(),batch};
         it.to=matchTo(it.memo);
-        if(prev.has(sig(it))){ it.dup=true; it.to='ex'; dups++; }
+        if(prev.has(sig(it))){ it.dup=true; it.to='ex'; dups++; S.items.push(it); added++; return; }
+        // 👥 메모에 두 사람 이상 (태훈/최수) → 사람마다 한 줄씩 나눠서 (금액은 똑같이, 수량도 나눠지면 나눔)
+        const nm=memoNames(it.memo);
+        if(nm.length>=2){
+          const N=nm.length, base=Math.floor(total/N), rem=total-base*N, sq=qty%N===0?qty/N:qty, s0=sig(it);
+          nm.forEach((n,k)=>{ const part=base+(k===N-1?rem:0);
+            S.items.push({...it,id:nid(),memo:n,memo0:it.memo,sig0:s0,split:`${it.memo} · ${N}명 나눔`,qty:sq,price:qty%N===0?price:Math.round(part/(sq||1)),total:part,to:matchTo(n)}); added++; });
+          return;
+        }
         S.items.push(it); added++;
       });
     }catch(e){
