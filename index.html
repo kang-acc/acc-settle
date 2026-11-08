@@ -255,6 +255,8 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
 
 #toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--card);padding:9px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:90vw;text-align:center}
 #toast.show{opacity:1}
+/* 🙈 강CRM '이름 · 번호 가리기'를 켜면 악세정산도 같이 (화면 글자만 · 저장 값은 그대로) */
+html.pm-on #rName, html.pm-on #rPhone { -webkit-text-security: disc; }
 </style>
 </head>
 <body>
@@ -2089,6 +2091,27 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigat
 </script>
 
 <script>window.addEventListener('error',e=>{ if(String(e.filename||e.message||'').includes('firebasejs')) window.KCRM_LOAD_ERR=1; },true);</script>
+<script>
+/* 🙈 강CRM 설정 '고객 이름 · 전화번호 · 생년월일 가리기'(smart_global/settings.privacyMask)를 따라 화면 글자만 가림
+   · 예약 손님 이름 → 김○우 · 번호 → 010-****-1234 · 입력칸은 값 그대로(●로만 보임) · 끄면 원래 글자로 */
+(function(){
+  const PM={on:false,orig:new WeakMap(),touched:new Set(),obs:null};
+  const SKIP=new Set(['SCRIPT','STYLE','TEXTAREA','INPUT','NOSCRIPT']);
+  const PH=/(01[016789])([-.\s]?)(\d{3,4})([-.\s]?)(\d{4})(?!\d)/g;
+  const mn=n=>{const c=[...String(n).replace(/\s+/g,'')]; if(c.length<=1) return c.join(''); if(c.length===2) return c[0]+'○'; return c[0]+'○'.repeat(Math.min(c.length-2,3))+c[c.length-1];};
+  const esc=t=>String(t).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  function names(){ try{ const L=(typeof S!=='undefined'&&S&&S.resv)||[]; const m=new Map(); L.forEach(r=>{const n=String(r.cname||'').trim().replace(/\s+/g,''); if(n.length>=2&&n.length<=12&&!/^\d+$/.test(n)) m.set(n,mn(n));}); return m; }catch(e){ return new Map(); } }
+  function mask(t){ const m=names(); let o=t; if(m.size){ const re=new RegExp([...m.keys()].sort((a,b)=>b.length-a.length).map(esc).join('|'),'g'); o=o.replace(re,x=>m.get(x)||x); } return o.replace(PH,(x,a,s1,mid,s2,l)=>a+(s1||'-')+'*'.repeat(mid.length)+(s2||'-')+l); }
+  function skip(n){ for(let el=n.parentElement;el;el=el.parentElement){ if(SKIP.has(el.tagName)||el.isContentEditable) return true; if(el===document.body) return false; } return false; }
+  function node(n){ const t=n.nodeValue; if(!t||t.length<2||skip(n)) return; const m=mask(t); if(m!==t){ if(!PM.orig.has(n)) PM.orig.set(n,t); PM.touched.add(n); n.nodeValue=m; } }
+  function walk(r){ if(!r) return; if(r.nodeType===3) return node(r); if(r.nodeType!==1&&r.nodeType!==11) return; const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT); const a=[]; let n; while((n=w.nextNode())) a.push(n); a.forEach(node); }
+  window.accPmSet=function(on){
+    on=!!on; document.documentElement.classList.toggle('pm-on',on); if(on===PM.on) return; PM.on=on;
+    if(on){ walk(document.body); if(!PM.obs) PM.obs=new MutationObserver(ms=>{ if(!PM.on) return; ms.forEach(mu=>{ if(mu.type==='characterData') node(mu.target); else mu.addedNodes.forEach(walk); }); }); PM.obs.observe(document.body,{childList:true,subtree:true,characterData:true}); }
+    else { if(PM.obs) PM.obs.disconnect(); PM.touched.forEach(n=>{ const o=PM.orig.get(n); if(o!==undefined&&n.isConnected) n.nodeValue=o; }); PM.touched.clear(); PM.orig=new WeakMap(); }
+  };
+})();
+</script>
 <script type="module">
 /* 🔗 강CRM(Firebase)과 연결 — 강CRM에 등록된 직원 계정만 */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -2128,6 +2151,7 @@ function slot(id) {
     if (u && !(await staffOk(sl.db, em))) { signOut(sl.auth); sl.user = null; if (typeof toast === 'function') toast('강CRM에 등록된 직원 계정만 쓸 수 있어요'); }
     else sl.user = u;
     fire();
+    if (sl.user) settingsOf(sl).then(st => { try { if (window.accPmSet) window.accPmSet(st && st.privacyMask === true); } catch (e) {} }).catch(() => {});   // 🙈 강CRM 가리기 따라가기
   });
   return sl;
 }
