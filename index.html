@@ -11,16 +11,16 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <title>악세 주문 정산</title>
+<script>/* 🌗 화면 밝기 (깜빡임 없게 먼저) */(function(){function ap(){var m='auto';try{m=localStorage.getItem('accTheme')||'auto'}catch(e){}var d=m==='dark'||(m!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dk',d);var t=document.querySelector('meta[name=theme-color]');if(t)t.content=d?'#09090B':'#FAFAFA';}window.__accTheme=ap;ap();try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',ap)}catch(e){}})();</script>
 <style>
 :root{
   --bg:#FAFAFA; --card:#FFFFFF; --ink:#09090B; --sub:#71717A; --line:#E4E4E7;
   --acc:#18181B; --acc-soft:#F4F4F5; --warn:#B45309; --warn-soft:#FEF3C7; --bad:#C62828; --bad-soft:#FDECEC; --ok:#1F7A55;
   box-sizing:border-box;
 }
-@media (prefers-color-scheme:dark){
-  :root{ --bg:#09090B; --card:#18181B; --ink:#FAFAFA; --sub:#A1A1AA; --line:#27272A;
+html.dk{color-scheme:dark}   /* 🌗 화면 밝기: 자동(폰 따라) · 밝게 · 어둡게 — html.dk 이면 어두운 색 */
+html.dk{ --bg:#09090B; --card:#18181B; --ink:#FAFAFA; --sub:#A1A1AA; --line:#27272A;
     --acc:#52525B; --acc-soft:#27272A; --warn:#FBBF24; --warn-soft:#3A2E12; --bad:#FF7A7A; --bad-soft:#3A1C1C; --ok:#5BD49B; }
-}
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
@@ -92,12 +92,12 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .rb.ok{background:#E3F4EC;color:var(--ok)}
 .rb.miss{background:var(--bad);color:#fff}
 .rb.uns{background:var(--warn-soft);color:var(--warn)}
-@media (prefers-color-scheme:dark){.rb.ok{background:#16352A}}
+html.dk .rb.ok{background:#16352A}
 .resvsum{margin:10px 12px 0;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600}
 .resvsum.bad{background:var(--bad-soft);color:var(--bad)}
 .resvsum.uns{background:var(--warn-soft);color:var(--warn)}
 .resvsum.ok{background:#E3F4EC;color:var(--ok)}
-@media (prefers-color-scheme:dark){.resvsum.ok{background:#16352A}}
+html.dk .resvsum.ok{background:#16352A}
 .ghost.chk{border-style:solid;color:var(--ink)}
 .ghost:disabled{opacity:.45}
 .rdone{border-top:1px solid var(--line)}
@@ -117,9 +117,9 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 
 .sbtn{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font-size:13px;font-weight:700;color:var(--ink)}
 .sbtn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
-.rb.st-o{background:#E0E7FF;color:#3730A3}
+.rb.st-o{background:#F4F4F5;color:#3F3F46}
 .rb.st-a{background:var(--warn-soft);color:var(--warn)}
-@media (prefers-color-scheme:dark){.rb.st-o{background:#24264A;color:#C7D2FE}}
+html.dk .rb.st-o{background:#27272A;color:#E4E4E7}
 .apick{display:flex !important;align-items:flex-start;gap:8px;padding:7px 0;margin:0 !important;border-bottom:1px solid var(--line);color:var(--ink) !important;font-size:14px !important}
 .apick input{width:20px;height:20px;margin-top:1px;accent-color:var(--acc);flex:none}
 .apick small{display:block;font-size:12px;color:var(--sub)}
@@ -184,10 +184,12 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .ghost{flex:1;border:1.5px dashed var(--line);background:none;color:var(--sub);border-radius:10px;padding:10px;font-weight:600;font-size:14px}
 
 /* 🌙 어두운 화면: 강조색(회색)을 글씨로 쓰는 곳은 밝은 글씨로 (흐려 보이지 않게) */
-@media (prefers-color-scheme:dark){
-  .tog.on,.topb,.topall,.storetag,.tagm,.tpl,.toprow .done,.pc2,.chb.on,.iact select.shared{color:var(--ink)!important}
-  .topall,.topb,.tog.on,.chb.on,.iact select.shared{border-color:#71717A!important}
-}
+html.dk :is(.tog.on,.topb,.topall,.storetag,.tagm,.tpl,.toprow .done,.pc2,.chb.on,.iact select.shared){color:var(--ink)!important}
+html.dk :is(.topall,.topb,.tog.on,.chb.on,.iact select.shared){border-color:#71717A!important}
+.thm{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 4px;font-weight:700}
+.thmseg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;min-width:210px}
+.thmseg button{border:0;background:none;border-radius:8px;padding:7px 0;font-size:13.5px;font-weight:600;color:var(--sub)}
+.thmseg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 /* 인원 · 👥 한 줄 목록 (누르면 펼치기) */
 #people{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 #people:empty{display:none}
@@ -281,9 +283,9 @@ dialog::backdrop{background:rgba(10,12,25,.5)}
 .crmbox{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
 .crmchk{display:flex !important;align-items:center;gap:8px;margin:0 !important;color:var(--ink) !important;font-size:14px !important}
 .crmchk input{width:20px;height:20px;accent-color:var(--acc)}
-.rb.crm{background:#E0E7FF;color:#3730A3}
+.rb.crm{background:#F4F4F5;color:#3F3F46}
 .rb.crmx{background:var(--warn-soft);color:var(--warn)}
-@media (prefers-color-scheme:dark){.rb.crm{background:#24264A;color:#C7D2FE}}
+html.dk .rb.crm{background:#27272A;color:#E4E4E7}
 
 #toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--card);padding:9px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:90vw;text-align:center}
 #toast.show{opacity:1}
@@ -367,6 +369,7 @@ html.pm-on #rName, html.pm-on #rPhone { -webkit-text-security: disc; }
 
 <dialog id="setDlg"><form method="dialog" class="sheet">
   <h3>설정 <span class="storetag" data-storename></span></h3>
+  <div class="thm"><span>🌗 화면</span><div class="thmseg" id="thmSeg" role="group" aria-label="화면 밝기"><button type="button" data-thm="auto">자동</button><button type="button" data-thm="light">밝게</button><button type="button" data-thm="dark">어둡게</button></div></div>
 
   <details class="acc" id="accStore">
     <summary><span>🏪 매장</span><small id="sumStore"></small></summary>
@@ -463,7 +466,7 @@ html.pm-on #rName, html.pm-on #rPhone { -webkit-text-security: disc; }
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V11.2</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V12 · 화면 밝기 고르기</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -1735,7 +1738,11 @@ function fillSummaries(){
   syncStoreDel();
   try{ renderCloud(); }catch(e){}
 }
+// 🌗 화면 밝기 고르기 (이 폰에 기억)
+function thmPaint(){ let m='auto'; try{ m=localStorage.getItem('accTheme')||'auto'; }catch(e){} document.querySelectorAll('#thmSeg [data-thm]').forEach(b=>{ const on=b.dataset.thm===m; b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); }); }
+$('#thmSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-thm]'); if(!b) return; try{ localStorage.setItem('accTheme',b.dataset.thm); }catch(err){} if(window.__accTheme) window.__accTheme(); thmPaint(); });
 function openSettings(openId){
+  thmPaint();
   $('#tplRow').hidden=!(S.blockTpl||S.totTpl); $('#storeName').value=curStore().name; $('#key').value=getKey(); $('#model').value=G.model||'';
   $('#suffix').value=S.suffix||''; $('#amtStyle').value=S.amtStyle||'split'; $('#totStyle').value=S.totStyle||'pay';
   $('#smsStore').value=S.smsStore||''; $('#tplArr').value=S.tplArr||ARR_TPL; $('#tplRem').value=S.tplRem||REM_TPL; $('#relayPwIn').value=relayPw(); $('#relayMsg').textContent='';
