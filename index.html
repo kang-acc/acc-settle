@@ -183,8 +183,40 @@ button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .rowbtns{display:flex;gap:8px;margin-top:8px}
 .ghost{flex:1;border:1.5px dashed var(--line);background:none;color:var(--sub);border-radius:10px;padding:10px;font-weight:600;font-size:14px}
 
-/* 인원 */
-.person{padding:10px 12px;margin-bottom:8px}
+/* 🌙 어두운 화면: 강조색(회색)을 글씨로 쓰는 곳은 밝은 글씨로 (흐려 보이지 않게) */
+@media (prefers-color-scheme:dark){
+  .tog.on,.topb,.topall,.storetag,.tagm,.tpl,.toprow .done,.pc2,.chb.on,.iact select.shared{color:var(--ink)!important}
+  .topall,.topb,.tog.on,.chb.on,.iact select.shared{border-color:#71717A!important}
+}
+/* 인원 · 👥 한 줄 목록 (누르면 펼치기) */
+#people{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+#people:empty{display:none}
+.person{padding:0;margin:0;border-top:1px solid var(--line)}
+#people>:first-child{border-top:0}
+.phead,.pblank{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;text-align:left;padding:11px 12px;color:var(--ink)}
+.pblank{border-top:1px solid var(--line)}
+.pav{width:38px;height:38px;border-radius:50%;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.pblank .pav,.pblank .pnm{color:var(--sub)}
+.pmid{flex:1;min-width:0;display:flex;flex-direction:column}
+.pnm{font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px;min-width:0}
+.pnm>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ptag{flex-shrink:0;font-size:11px;font-weight:700;border:1px solid var(--line);border-radius:99px;padding:0 7px;color:var(--sub)}
+.ptag.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.psub{font-size:12.5px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pamt{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pamt b{display:block;font-size:15px}.pamt b.neg{color:var(--bad)}
+.pamt span{font-size:11.5px;color:var(--sub)}
+.pchev{color:var(--sub);font-size:20px;line-height:1;transition:transform .15s}
+.person.open .pchev{transform:rotate(90deg)}
+.person.open .phead{background:var(--bg)}
+.pbody{display:none;padding:10px 12px 12px;background:var(--bg);border-top:1px solid var(--line)}
+.person.open .pbody{display:block}
+.pbody .pcalc{background:var(--card)}
+.psum{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);padding:8px 4px 0}
+.psum:empty{display:none}
+.psum b{color:var(--ink)}
+#addPerson{margin-top:10px}
+@media (prefers-reduced-motion:reduce){.pchev{transition:none}}
 .prow{display:grid;grid-template-columns:1fr 1.4fr 30px;gap:6px;align-items:center}
 .prow input.nm{font-weight:700}
 .prow2{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;margin-top:8px}
@@ -309,6 +341,7 @@ html.pm-on #rName, html.pm-on #rPhone { -webkit-text-security: disc; }
   <h2><span>인원<span class="storetag" data-storename></span></span> <small>공용은 켜진 사람끼리 나눠요</small></h2>
   <button type="button" class="topall" id="topAllBtn">💰 월초 영활비 충전 (한 번에)</button>
   <div id="people"></div>
+  <div id="psum" class="psum"></div>
   <button class="addp" id="addPerson"><b>+</b> 인원 추가</button>
 
   <h2><span>보고<span class="storetag" data-storename></span></span></h2>
@@ -687,9 +720,18 @@ function renderItems(){
       ${mismatch?'<div class="flag">단가×수량과 합계가 달라요. 눌러서 확인</div>':''}
     </div>`;}).join(''):`<div class="empty">${S.items.length?'이 조건에 맞는 품목이 없어요.':'주문표 사진을 찍거나 고르면 품목이 여기 채워져요.'}</div>`;
 }
-function renderPeople(){
-  $('#people').innerHTML=S.people.map(p=>`
-    <div class="card person" data-id="${p.id}">
+// 👥 인원 한 줄 (이름 · 공용 · 이번 주문 · 남은 잔액) → 누르면 그 사람만 펼쳐서 고치기 · 이름 없는 칸은 한 줄로 묶음
+let POPEN=new Set(), PBLANK=false;
+function personHtml(p){
+  const nm=(p.name||'').trim();
+  return `
+    <div class="person${POPEN.has(p.id)?' open':''}" data-id="${p.id}">
+      <button type="button" class="phead" data-popen aria-expanded="${POPEN.has(p.id)}">
+        <span class="pav" data-pav>${esc(nm?[...nm][0]:'+')}</span>
+        <span class="pmid"><span class="pnm"><span data-pnm>${esc(nm||'이름 없음')}</span><span class="ptag${p.shared?' on':''}">${p.shared?'공용':'공용 빠짐'}</span></span><span class="psub" data-psub></span></span>
+        <span class="pamt" data-pamt></span><span class="pchev" aria-hidden="true">›</span>
+      </button>
+      <div class="pbody">
       <div class="prow">
         <input class="nm" value="${esc(p.name)}" data-f="name" placeholder="이름" aria-label="이름">
         <input value="${esc(p.label)}" data-f="label" placeholder="구분 (예: 고객서비스/공용)" aria-label="구분">
@@ -701,7 +743,13 @@ function renderPeople(){
         <button type="button" class="topb" data-top aria-label="${esc(p.name||'')} 잔액 충전">＋ 충전</button>
       </div>
       <div class="pcalc" data-calc></div>
-    </div>`).join('');
+      </div>
+    </div>`;
+}
+function renderPeople(){
+  const named=S.people.filter(p=>(p.name||'').trim()||POPEN.has(p.id)), blank=S.people.filter(p=>!(p.name||'').trim()&&!POPEN.has(p.id));
+  $('#people').innerHTML=named.map(personHtml).join('')
+    +(blank.length?(PBLANK?blank.map(personHtml).join(''):`<button type="button" class="pblank" data-pblank><span class="pav">+</span><span class="pmid"><span class="pnm">이름 없음 ${blank.length}칸</span><span class="psub">누르면 펼쳐서 이름을 넣어요</span></span><span class="pchev" aria-hidden="true">›</span></button>`):'');
 }
 function update(){
   const c=calc();
@@ -709,8 +757,14 @@ function update(){
     const el=document.querySelector(`.person[data-id="${r.p.id}"] [data-calc]`); if(!el) return;
     const left=r.manual?`이번 <b>${fmt(r.amt)}원</b> <span class="tagm">✏️ 직접</span>`:(r.amt?`이번 ${fmt(r.own)}원${r.share?'+'+fmt(r.share)+'원':''}`:`<span style="color:var(--sub)">이번 주문 없음</span>`);
     const notes=[...r.cin.map(x=>`🤝 ${esc(pName(x.from))}가 ${fmt(x.amt)}원 밀어줌`),...r.cout.map(x=>`🤝 ${esc(pName(x.to))}에게 ${fmt(x.amt)}원 밀어줌`)];
+    const card=el.closest('.person');
+    if(card){ const nm=(r.p.name||'').trim(), q=s=>card.querySelector(s);
+      q('[data-pnm]').textContent=nm||'이름 없음'; q('[data-pav]').textContent=nm?[...nm][0]:'+';
+      q('[data-psub]').innerHTML=r.amt?`이번 주문 ${fmt(r.amt)}원${r.manual?' · ✏️ 직접':''}`:(r.inn||r.out?'🤝 밀어주기':'이번 주문 없음');
+      q('[data-pamt]').innerHTML=`<b class="${r.after<0?'neg':''}">${fmt(r.after)}원</b><span>${r.after<0?'잔액 모자람':'남은 잔액'}</span>`; }
     el.innerHTML=`<div class="pc1"><span>${left}</span><span>${r.amt||r.inn||r.out?'→ ':''}잔액 <b class="${r.after<0?'neg':''}">${fmt(r.after)}원</b></span></div>${notes.length?`<div class="pc2">${notes.join('<br>')}</div>`:''}<button type="button" class="adjb" data-adj>✏️ 금액 · 🤝 밀어주기</button>`;
   });
+  { const ps=$('#psum'); if(ps){ const named=c.rows.filter(r=>(r.p.name||'').trim()); ps.innerHTML=named.length?`<span>잔액 합계 (${named.length}명)</span><b>${fmt(named.reduce((a,r)=>a+r.after,0))}원</b>`:''; } }
   const w=[];
   if(c.unsetN) w.push(`누구 건지 안 정한 품목 ${c.unsetN}개(${fmt(c.unsetSum)}원)가 있어요. 위 목록에서 빨간 줄을 정해주세요.`);
   if(c.noMembers) w.push('공용 품목이 있는데 공용 나눔이 켜진 사람이 없어요.');
@@ -1031,6 +1085,9 @@ $('#people').addEventListener('change',e=>{
   }
 });
 $('#people').addEventListener('click',e=>{
+  if(e.target.closest('[data-pblank]')){ PBLANK=true; renderPeople(); update(); return; }
+  const hd=e.target.closest('[data-popen]');
+  if(hd){ const cd=hd.closest('.person'), id=cd.dataset.id, on=!POPEN.has(id); if(on) POPEN.add(id); else POPEN.delete(id); cd.classList.toggle('open',on); hd.setAttribute('aria-expanded',on); return; }
   const card=e.target.closest('.person'); if(!card) return;
   const p=S.people.find(x=>x.id===card.dataset.id);
   if(e.target.closest('[data-tog]')){ p.shared=!p.shared; renderPeople(); update(); }
@@ -1128,8 +1185,8 @@ $('#adjDlg').addEventListener('close',()=>{
 });
 
 $('#addPerson').onclick=()=>{
-  S.people.push({id:nid(),name:'',label:'고객서비스/공용',shared:false,bal:0}); renderAll();
-  const ins=document.querySelectorAll('.person .nm'); const last=ins[ins.length-1]; last.focus(); last.scrollIntoView({block:'center'});
+  const np={id:nid(),name:'',label:'고객서비스/공용',shared:false,bal:0}; S.people.push(np); POPEN.add(np.id); renderAll();
+  const last=document.querySelector(`.person[data-id="${np.id}"] .nm`); if(last){ last.focus(); last.scrollIntoView({block:'center'}); }   // 👥 새 인원은 펼친 채로
 };
 
 /* ---------- 보고 ---------- */
