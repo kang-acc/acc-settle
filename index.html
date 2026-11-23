@@ -466,7 +466,7 @@ html.pm-on #rName, html.pm-on #rPhone { -webkit-text-security: disc; }
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V12 · 화면 밝기 고르기</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V13 · 주문완료 · 도착을 강CRM 고객카드에도</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -608,7 +608,7 @@ const getKey=()=>KEYS[curStore().id]||'';
 function setKey(id,k){ if(k) KEYS[id]=k; else delete KEYS[id]; try{ localStorage.setItem(KEYS_KEY,JSON.stringify(KEYS)); }catch(e){} }
 // 모델 목록은 키마다 따로 기억
 const C=()=>{ G.mc=G.mc||{}; const k=getKey().slice(-10)||'none'; return G.mc[k]||(G.mc[k]={}); };
-function save(){ try{ localStorage.setItem(GKEY,JSON.stringify(G)); }catch(e){} if(typeof scheduleSync==='function') scheduleSync(); }
+function save(){ try{ localStorage.setItem(GKEY,JSON.stringify(G)); }catch(e){} if(typeof scheduleSync==='function') scheduleSync(); if(typeof accStSoon==='function') accStSoon(); }
 const curStore=()=>G.stores[G.cur];
 window.ACC_CUR_ID=()=>curStore().id;
 window.ACC_STORE_IDS=()=>G.stores.map(s=>s.id);
@@ -1910,6 +1910,32 @@ function syncCrmBox(){
   $('#rCrmInfo').textContent=!window.KCRM?'강CRM 연결 준비 중이에요…':(u?`${curStore().name} · ${u.split('@')[0]} 계정으로 강CRM 고객의 '악세 예약' 약속에 넣어요. 찾으러 오는 날 아침에 알림이 가요.`:`저장하면 ${curStore().name}에서 쓸 강CRM 직원 계정 로그인 창이 떠요. (이 매장 처음 한 번)`);
 }
 let crmSyncing=false;
+// 📦 V13 예약 진행 상태(주문완료 · 도착)를 강CRM 고객카드에도 (강CRM 고객카드 악세 예약 옆에 보여요) · 찾아감은 예전처럼 체크로
+let accStT=0, accStBusy=false;
+function accStSoon(){ clearTimeout(accStT); accStT=setTimeout(pushAccSt,2500); }
+async function pushAccSt(){
+  if(accStBusy||!window.KCRM) return; accStBusy=true; let n=0;
+  try{
+    // 한 손님에게 예약이 여럿이면 가장 앞선 상태 하나로 (도착 > 주문완료 > 없음) — 예약마다 따로 쓰면 서로 덮어썼음
+    const RANK={'':0,ordered:1,arrived:2}, want=new Map();
+    for(const st of G.stores){
+      if(!crmEmail(st.id)) continue;
+      for(const r of (st.data.resv||[])){
+        if(!(r.crm||r.src==='crm')||!okTel(r.phone)) continue;
+        const s1=(r.status==='ordered'||r.status==='arrived')?r.status:'', cur=want.get(r.phone);
+        if(!cur||RANK[s1]>RANK[cur.st]) want.set(r.phone,{st:s1,sid:cur&&RANK[cur.st]>=RANK[s1]?cur.sid:st.id});
+      }
+    }
+    G.crmSt=G.crmSt||{};
+    for(const [phone,{st,sid}] of want){
+      if((G.crmSt[phone]||'')===st) continue;
+      try{ const res=await KCRM.setAccSt(sid, phone, st); if(res!=='err'){ G.crmSt[phone]=st; n++; } }catch(e){ /* 다음에 다시 */ }
+    }
+    Object.keys(G.crmSt).forEach(ph=>{ if(!want.has(ph)) delete G.crmSt[ph]; });   // 목록에서 빠진 손님은 기억도 지움
+    if(n){ try{ localStorage.setItem(GKEY,JSON.stringify(G)); }catch(e){} if(typeof scheduleSync==='function') scheduleSync(); }
+  }finally{ accStBusy=false; }
+}
+setTimeout(accStSoon,8000);   // 앱을 열면 한 번 (예전 예약 상태도 강CRM에)
 async function syncCrm(auto){
   if(crmSyncing) return; const list=pendingCrm(), dels=pendingCrmDel(); if(!list.length&&!dels.length) return;
   if(!window.KCRM){ if(!auto) toast('강CRM 연결 준비 중이에요. 잠시 뒤 다시 눌러주세요'); return; }
@@ -2339,6 +2365,20 @@ window.KCRM = {
     const sl = slot(sid);
     if (!sl.user || !Array.isArray(names) || !names.length) return;
     try { await setDoc(doc(sl.db, 'smart_global', 'settings'), { accStores: names.slice(0, 20) }, { merge: true }); } catch (e) { /* 권한 없으면 그만 */ }
+  },
+  // 📦 V13 진행 상태만 적기 (주문완료 'ordered' · 도착 'arrived' · '' = 지움) — 그 손님 악세 예약이 남아 있을 때만
+  async setAccSt(sid, phone, st) {
+    const sl = slot(sid); if (!sl.user) return 'err';
+    const db = sl.db, id = String(phone || '').replace(/\D/g, '');
+    if (!/^01\d{8,9}$/.test(id)) return 'none';
+    let ref = doc(db, 'smart_customers', id), snap;
+    try { snap = await getDoc(ref); } catch (e) { return 'err'; }
+    if (!snap.exists()) { const m = await movedCustomer(db, id); if (!m) return 'none'; ref = doc(db, 'smart_customers', m.id); try { snap = await getDoc(ref); } catch (e) { return 'err'; } }
+    const c = snap.data() || {};
+    if ((!c.promAccDate && !c.promAccMemo) || c.promAccChk) return 'none';
+    if ((c.promAccSt || '') === st) return 'same';
+    try { await setDoc(ref, { promAccSt: st, promAccStAt: st ? new Date().toISOString() : '', updatedAt: new Date().toISOString() }, { merge: true }); } catch (e) { return 'err'; }
+    return 'ok';
   },
   // 강CRM 고객의 '악세 예약'에서 이 예약 줄만 빼기 (다른 예약이 남아 있으면 그 줄은 그대로)
   async removeAcc(x, sid) {
