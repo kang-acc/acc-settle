@@ -467,7 +467,7 @@ html.pm-on #rName, html.pm-on #rPhone { -webkit-text-security: disc; }
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V14 · AI 읽기 60초 제한 · 안정 모델 먼저</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V15 · 문자를 강CRM 다리로 (결과 확인)</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -1506,9 +1506,41 @@ function fillArr(tpl,g){
    · 가장 단순한 요청(text/plain)으로 보냄 → 서버가 '사전 확인(OPTIONS)'을 막아도 닿아요
    · 그래도 응답을 못 읽으면(서버가 강CRM 주소만 허용) '결과 확인 없이 보내기'로 (보내기는 되지만 성공 여부는 매장 폰에서 확인)
    · 보내기는 절대 두 번 다시 보내지 않음 (응답만 못 읽은 경우에도 이미 나갔을 수 있어서) */
-let RELAY_MODE=null;   // 'cors' = 결과 확인됨 · 'blind' = 결과 확인 없이
+let RELAY_MODE=null;   // 'cors' = 결과 확인됨 · 'bridge' = 강CRM 주소를 거쳐서 (결과 확인됨 · V15) · 'blind' = 결과 확인 없이
+/* 📨 V15 강CRM 다리: 중계 서버가 강CRM 주소만 받아서 여기(kang-acc.github.io)서 바로 부르면 문자가 안 나갔어요
+   → 강CRM 사이트의 relaybridge.html을 숨은 창으로 열고, 그 창이 대신 중계 서버를 불러 결과를 돌려줘요 */
+const BRIDGE_URL='https://kanggun1983.github.io/my-scanner/relaybridge.html', BRIDGE_ORIGIN='https://kanggun1983.github.io';
+let bridgeWin=null, bridgeReady=null, bridgeSeq=0; const bridgeWait={};
+window.addEventListener('message',e=>{
+  if(e.origin!==BRIDGE_ORIGIN) return; const m=e.data||{};
+  if(m.type==='relay-ready'&&bridgeReady) bridgeReady.done();
+  if(m.type==='relay-res'&&bridgeWait[m.id]){ const w=bridgeWait[m.id]; delete bridgeWait[m.id]; clearTimeout(w.t); w.res(m); }
+});
+function bridgeOpen(){
+  if(bridgeReady) return bridgeReady.p;
+  let done; const p=new Promise((res,rej)=>{ done=()=>{ clearTimeout(t); res(true); }; const t=setTimeout(()=>{ bridgeReady=null; rej(new Error('강CRM 다리를 못 열었어요')); },10000); });
+  bridgeReady={p,done};
+  const f=document.createElement('iframe'); f.src=BRIDGE_URL; f.title='relay'; f.style.cssText='position:absolute;width:1px;height:1px;border:0;left:-9999px;top:-9999px';
+  document.body.appendChild(f); bridgeWin=f.contentWindow;
+  return p;
+}
+async function bridgeCall(url,body){
+  await bridgeOpen();
+  const id='r'+(++bridgeSeq)+'_'+Date.now();
+  return new Promise((res,rej)=>{
+    const t=setTimeout(()=>{ delete bridgeWait[id]; rej(new Error('강CRM 다리 응답이 없어요')); },25000);
+    bridgeWait[id]={res,t};
+    bridgeWin.postMessage({type:'relay',id,url,body:{...body,password:relayPw()}},BRIDGE_ORIGIN);
+  });
+}
 function relayOpt(body){ return {method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({...body,password:relayPw()})}; }
 async function relayFetch(url,body,mode){
+  if(mode==='bridge'){   // V15
+    const m=await bridgeCall(url,body);
+    if(!m.ok){ const er=new Error(m.error||'중계 서버에 연결하지 못했어요'); er.net=true; throw er; }
+    const d=m.data; if(!d||!d.ok){ const er=new Error((d&&d.error)||`중계 서버 응답 오류 (${m.status})`); er.http=true; throw er; }
+    return d;
+  }
   if(mode==='blind'){
     try{ await fetch(url,{...relayOpt(body),mode:'no-cors'}); }catch(e){ throw new Error('중계 서버에 닿지 않아요 (인터넷 확인)'); }
     return {ok:true,blind:true};
@@ -1522,6 +1554,8 @@ async function relayProbe(url){
   try{ const d=await relayFetch(url,{sms:'status'},'cors'); RELAY_MODE='cors'; return {mode:'cors',d}; }
   catch(e){
     if(e.http) throw e;   // 서버가 대답은 했는데 거절 (비밀번호 등)
+    try{ const d=await relayFetch(url,{sms:'status'},'bridge'); RELAY_MODE='bridge'; return {mode:'bridge',d}; }   // V15 강CRM 다리로
+    catch(eb){ if(eb.http) throw eb; }
     try{ await fetch(url,{...relayOpt({sms:'status'}),mode:'no-cors'}); RELAY_MODE='blind'; return {mode:'blind'}; }
     catch(e2){ throw new Error('중계 서버에 닿지 않아요. 인터넷이나 강CRM의 서버 주소를 확인해 주세요'); }
   }
@@ -1808,7 +1842,8 @@ $('#relayTest').onclick=async()=>{
     const info=await relayInfoForTest(say); if(!info) return;
     RELAY_MODE=null;
     const p=await relayProbe(info.relayUrl);
-    if(p.mode==='cors') say(p.d.ready===false?'⚠️ 중계 서버는 연결됐는데 매장 폰(SMSGate)이 꺼져 있거나 연결이 안 돼 있어요':'✅ 연결됐어요. 문자·푸시가 바로 나가고 결과도 확인돼요', p.d.ready===false?'err':'');
+    if(p.mode==='bridge') say(p.d&&p.d.ready===false?'⚠️ 강CRM 다리로 연결됐는데 매장 폰(SMSGate)이 꺼져 있거나 연결이 안 돼 있어요':'✅ 강CRM 다리로 연결됐어요. 문자·푸시가 바로 나가고 결과도 확인돼요', p.d&&p.d.ready===false?'err':'');   // V15
+    else if(p.mode==='cors') say(p.d.ready===false?'⚠️ 중계 서버는 연결됐는데 매장 폰(SMSGate)이 꺼져 있거나 연결이 안 돼 있어요':'✅ 연결됐어요. 문자·푸시가 바로 나가고 결과도 확인돼요', p.d.ready===false?'err':'');
     else say('⚠️ 서버에는 닿는데 이 앱 주소로는 결과를 읽을 수 없어요. 보내기는 되지만 성공 여부는 확인이 안 돼요. 아래 시험 문자로 실제로 오는지 확인해 주세요. (완전히 고치려면 중계 서버 허용 주소에 kang-acc.github.io 추가)','err');
     fillSummaries();
   }catch(e){ say('❌ '+(e.message||'확인하지 못했어요'),'err'); }
