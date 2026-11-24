@@ -467,7 +467,7 @@ html.pm-on #rName, html.pm-on #rPhone { -webkit-text-security: disc; }
   </details>
 
   <div class="row"><button value="close" class="pri">닫기</button></div>
-  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V15 · 문자를 강CRM 다리로 (결과 확인)</div>
+  <div class="hint" style="text-align:center;margin-top:10px">악세정산 V16 · 문자 결과를 예약 줄에 (✅ 확인됨)</div>
 </form></dialog>
 
 <dialog id="instDlg"><form method="dialog" class="sheet">
@@ -1309,7 +1309,7 @@ function renderResv(){
     const linked=!!(r.crm||r.crmPending||r.src==='crm');
     const staff=whoName(r.who)||r.byName||'';
     const mid=(linked||s!=='wait')&&(r.cname||staff)?`<div class="rvc" data-redit>${r.cname?`<b>${esc(r.cname)}</b>`:''}${staff?`<span>담당 ${esc(staff)}</span>`:''}</div>`:'';
-    const when=s==='arrived'?(r.smsAt?`${[r.smsN?'문자':'',r.pushAt?'푸시':''].filter(Boolean).join('·')||'연락'} 보냄 ${hm(r.smsAt)}${r.smsN>1?` (문자 ${r.smsN}번)`:''}`:'연락 안 보냄'):(s==='ordered'?(r.orderTitle&&r.orderTitle!=='직접 체크'?r.orderTitle+'에 주문':''):'');
+    const when=s==='arrived'?(r.smsAt?`${[r.smsN?'문자':'',r.pushAt?'푸시':''].filter(Boolean).join('·')||'연락'} 보냄 ${hm(r.smsAt)}${r.smsN>1?` (문자 ${r.smsN}번)`:''}${r.smsN?({ok:' ✅ 확인됨',wait:' ⚠️ 매장 폰 대기',blind:' ❔ 결과 모름',app:' · 문자앱'})[r.smsRes]||'':''}`:'연락 안 보냄'):(s==='ordered'?(r.orderTitle&&r.orderTitle!=='직접 체크'?r.orderTitle+'에 주문':''):'');
     const sub=[r.qty>1?`${r.qty}개`:'',mid?'':whoName(r.who),r.memo,s==='wait'?new Date(r.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 예약':when].filter(Boolean).join(' · ');
     const crmB=s==='wait'?(r.crm?`<span class="rb crm" title="강CRM ${esc(fmtTel(r.crm.id))} ${esc(r.crm.date)}">${r.src==='crm'?'📥 CRM에서 ':'📅 CRM '}${esc(r.crm.date.slice(5).replace('-','/'))}</span>`:(r.crmPending?'<span class="rb crmx" data-crmretry>CRM 등록 대기</span>':'')):'';
     return `<div class="rv${s==='wait'&&r.chk&&r.chk.s==='missing'?' miss':''}${s==='arrived'&&daysSince(r.arrivedAt||Date.now())>=3?' late':''}" data-rid="${r.id}">
@@ -1679,7 +1679,8 @@ function arrMarkArrived(items){
 async function arrAfterSent(g,k,how,text){
   const now=Date.now();
   if(ARR.mode!=='resend') arrMarkArrived(g.items);
-  g.items.forEach(r=>{ r.smsAt=now; r.smsN=(r.smsN||0)+(k==='s'?1:0); if(k==='p') r.pushAt=now; });
+  const sr=k!=='s'?'':(/매장 폰 연결 대기/.test(how)?'wait':(/결과 확인 안 됨/.test(how)?'blind':(/문자앱/.test(how)?'app':'ok')));   // V16 문자 결과를 예약 줄에 남김
+  g.items.forEach(r=>{ r.smsAt=now; r.smsN=(r.smsN||0)+(k==='s'?1:0); if(k==='p') r.pushAt=now; if(sr) r.smsRes=sr; });
   g.res[k]=how; delete g.fail[k];
   save(); renderResv();
   if(g.cust&&window.KCRM&&crmEmail(ARR.sid)){
